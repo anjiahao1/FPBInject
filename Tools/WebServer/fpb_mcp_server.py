@@ -452,7 +452,6 @@ def serial_send(
         return {"success": False, "error": f"Send error: {e}"}
 
 
-
 # ============================================================
 # File Transfer Tools (device required)
 # ============================================================

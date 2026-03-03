@@ -561,6 +561,7 @@ class TestFileListTool(unittest.TestCase):
 
     def setUp(self):
         import fpb_mcp_server
+
         fpb_mcp_server._cli_instance = None
 
     @patch("fpb_mcp_server.FPBCLI")
@@ -571,7 +572,11 @@ class TestFileListTool(unittest.TestCase):
         mock_cli_cls.return_value = mock_instance
 
         def fake_file_list(path):
-            print(json.dumps({"success": True, "path": path, "entries": [{"name": "a.txt"}]}))
+            print(
+                json.dumps(
+                    {"success": True, "path": path, "entries": [{"name": "a.txt"}]}
+                )
+            )
 
         mock_instance.file_list = fake_file_list
         result = file_list(path="/data")
@@ -599,6 +604,7 @@ class TestFileStatTool(unittest.TestCase):
 
     def setUp(self):
         import fpb_mcp_server
+
         fpb_mcp_server._cli_instance = None
 
     @patch("fpb_mcp_server.FPBCLI")
@@ -622,6 +628,7 @@ class TestFileDownloadTool(unittest.TestCase):
 
     def setUp(self):
         import fpb_mcp_server
+
         fpb_mcp_server._cli_instance = None
 
     @patch("fpb_mcp_server.FPBCLI")
@@ -632,7 +639,16 @@ class TestFileDownloadTool(unittest.TestCase):
         mock_cli_cls.return_value = mock_instance
 
         def fake_download(remote, local):
-            print(json.dumps({"success": True, "remote_path": remote, "local_path": local, "size": 100}))
+            print(
+                json.dumps(
+                    {
+                        "success": True,
+                        "remote_path": remote,
+                        "local_path": local,
+                        "size": 100,
+                    }
+                )
+            )
 
         mock_instance.file_download = fake_download
         result = file_download(remote_path="/dev/log.bin", local_path="/tmp/log.bin")

@@ -482,6 +482,7 @@ class FPBCLI:
             if not self._device_state.connected:
                 raise FPBCLIError("No device connected.")
             from core.file_transfer import FileTransfer
+
             ft = FileTransfer(self._fpb, chunk_size=self._device_state.chunk_size)
             success, entries = ft.flist(path)
             if not success:
@@ -496,6 +497,7 @@ class FPBCLI:
             if not self._device_state.connected:
                 raise FPBCLIError("No device connected.")
             from core.file_transfer import FileTransfer
+
             ft = FileTransfer(self._fpb, chunk_size=self._device_state.chunk_size)
             success, stat = ft.fstat(path)
             if not success:
@@ -511,6 +513,7 @@ class FPBCLI:
                 raise FPBCLIError("No device connected.")
             from core.file_transfer import FileTransfer
             import os
+
             ft = FileTransfer(
                 self._fpb,
                 chunk_size=self._device_state.chunk_size,
@@ -528,13 +531,15 @@ class FPBCLI:
             with open(local_path, "wb") as f:
                 f.write(data)
 
-            self.output_json({
-                "success": True,
-                "remote_path": remote_path,
-                "local_path": local_path,
-                "size": len(data),
-                "message": msg,
-            })
+            self.output_json(
+                {
+                    "success": True,
+                    "remote_path": remote_path,
+                    "local_path": local_path,
+                    "size": len(data),
+                    "message": msg,
+                }
+            )
         except Exception as e:
             self.output_error(f"file_download failed: {str(e)}", e)
 
