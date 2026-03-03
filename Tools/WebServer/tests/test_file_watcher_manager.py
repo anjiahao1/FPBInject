@@ -197,7 +197,7 @@ class TestTriggerAutoInject(unittest.TestCase):
 
         try:
             mock_gen = Mock()
-            mock_gen.find_marked_functions.return_value = []
+            mock_gen.generate_patch_inplace.return_value = (None, [])
             mock_gen_class.return_value = mock_gen
 
             _trigger_auto_inject(temp_path)
@@ -229,7 +229,7 @@ class TestTriggerAutoInject(unittest.TestCase):
 
         try:
             mock_gen = Mock()
-            mock_gen.find_marked_functions.return_value = []
+            mock_gen.generate_patch_inplace.return_value = (None, [])
             mock_gen_class.return_value = mock_gen
 
             mock_fpb = Mock()
@@ -253,7 +253,7 @@ class TestTriggerAutoInject(unittest.TestCase):
     def test_trigger_auto_inject_generate_patch_fails(
         self, mock_gen_class, mock_get_fpb
     ):
-        """Test auto inject when patch generation fails"""
+        """Test auto inject when no markers found (in-place mode has no separate patch generation)"""
         from services.file_watcher_manager import _trigger_auto_inject
 
         # Create temp file
@@ -263,8 +263,7 @@ class TestTriggerAutoInject(unittest.TestCase):
 
         try:
             mock_gen = Mock()
-            mock_gen.find_marked_functions.return_value = ["test_func"]
-            mock_gen.generate_patch.return_value = (None, [])
+            mock_gen.generate_patch_inplace.return_value = (None, [])
             mock_gen_class.return_value = mock_gen
 
             _trigger_auto_inject(temp_path)
@@ -272,8 +271,8 @@ class TestTriggerAutoInject(unittest.TestCase):
             # Wait for background thread
             time.sleep(0.2)
 
-            self.assertEqual(state.device.auto_inject_status, "failed")
-            self.assertIn("Failed to generate", state.device.auto_inject_message)
+            # In-place mode: no markers → idle (no separate patch generation step)
+            self.assertEqual(state.device.auto_inject_status, "idle")
         finally:
             os.unlink(temp_path)
 
@@ -292,11 +291,7 @@ class TestTriggerAutoInject(unittest.TestCase):
 
         try:
             mock_gen = Mock()
-            mock_gen.find_marked_functions.return_value = ["test_func"]
-            mock_gen.generate_patch.return_value = (
-                "/* FPB_INJECT */\nvoid test_func(void) {}",
-                ["test_func"],
-            )
+            mock_gen.generate_patch_inplace.return_value = (temp_path, ["test_func"])
             mock_gen_class.return_value = mock_gen
 
             # Device not connected
@@ -325,11 +320,7 @@ class TestTriggerAutoInject(unittest.TestCase):
 
         try:
             mock_gen = Mock()
-            mock_gen.find_marked_functions.return_value = ["test_func"]
-            mock_gen.generate_patch.return_value = (
-                "/* FPB_INJECT */\nvoid test_func(void) {}",
-                ["test_func"],
-            )
+            mock_gen.generate_patch_inplace.return_value = (temp_path, ["test_func"])
             mock_gen_class.return_value = mock_gen
 
             # Mock connected device
@@ -382,9 +373,8 @@ class TestTriggerAutoInject(unittest.TestCase):
 
         try:
             mock_gen = Mock()
-            mock_gen.find_marked_functions.return_value = ["func1", "func2"]
-            mock_gen.generate_patch.return_value = (
-                "/* FPB_INJECT */\nvoid func1(void) {} /* FPB_INJECT */\nvoid func2(void) {}",
+            mock_gen.generate_patch_inplace.return_value = (
+                temp_path,
                 ["func1", "func2"],
             )
             mock_gen_class.return_value = mock_gen
@@ -441,11 +431,7 @@ class TestTriggerAutoInject(unittest.TestCase):
 
         try:
             mock_gen = Mock()
-            mock_gen.find_marked_functions.return_value = ["test_func"]
-            mock_gen.generate_patch.return_value = (
-                "/* FPB_INJECT */\nvoid test_func(void) {}",
-                ["test_func"],
-            )
+            mock_gen.generate_patch_inplace.return_value = (temp_path, ["test_func"])
             mock_gen_class.return_value = mock_gen
 
             # Mock connected device
@@ -483,7 +469,7 @@ class TestTriggerAutoInject(unittest.TestCase):
 
         try:
             mock_gen = Mock()
-            mock_gen.find_marked_functions.side_effect = Exception("Parse error")
+            mock_gen.generate_patch_inplace.side_effect = Exception("Parse error")
             mock_gen_class.return_value = mock_gen
 
             _trigger_auto_inject(temp_path)
@@ -509,15 +495,8 @@ class TestTriggerAutoInject(unittest.TestCase):
 
         try:
             mock_gen = Mock()
-            mock_gen.find_marked_functions.return_value = [
-                "func1",
-                "func2",
-                "func3",
-                "func4",
-                "func5",
-            ]
-            mock_gen.generate_patch.return_value = (
-                "/* FPB_INJECT */\nvoid func1(void) {}",
+            mock_gen.generate_patch_inplace.return_value = (
+                temp_path,
                 ["func1", "func2", "func3", "func4", "func5"],
             )
             mock_gen_class.return_value = mock_gen

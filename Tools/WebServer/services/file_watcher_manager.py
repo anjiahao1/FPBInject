@@ -206,15 +206,13 @@ def _trigger_auto_inject(file_path):
 
             gen = PatchGenerator()
 
-            # Step 1: Find FPB_INJECT markers
+            # Step 1: Find FPB_INJECT markers (in-place mode)
             device.auto_inject_status = "detecting"
             device.auto_inject_message = "Searching for FPB_INJECT markers..."
             device.auto_inject_progress = 20
             device.auto_inject_last_update = time.time()
 
-            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                content = f.read()
-            marked = gen.find_marked_functions(content)
+            inplace_file, marked = gen.generate_patch_inplace(file_path)
 
             if not marked:
                 device.auto_inject_status = "idle"
@@ -262,47 +260,20 @@ def _trigger_auto_inject(file_path):
                 return
 
             device.auto_inject_modified_funcs = marked
-            logger.info(f"Found marked functions: {marked}")
+            logger.info(f"Found marked functions (in-place): {marked}")
 
-            # Step 2: Generate patch
+            # Step 2: Skip patch generation - use in-place compilation
             device.auto_inject_status = "generating"
-            device.auto_inject_message = f"Generating Patch: {', '.join(marked)}"
+            device.auto_inject_message = f"In-place compile: {', '.join(marked)}"
             device.auto_inject_progress = 40
             device.auto_inject_last_update = time.time()
 
-            patch_content, injected = gen.generate_patch(file_path)
+            logger.info(f"In-place mode: compiling {file_path} directly")
+            logger.info(f"Inject functions: {marked}")
 
-            if not patch_content:
-                device.auto_inject_status = "failed"
-                device.auto_inject_message = "Failed to generate Patch"
-                device.auto_inject_progress = 0
-                device.auto_inject_last_update = time.time()
-                return
-
-            # Log first 500 chars of patch for debugging
-            logger.info(f"Generated patch (first 500 chars):\n{patch_content[:500]}")
-            logger.info(f"Injected functions: {injected}")
-
-            # Check if FPB_INJECT marked functions are in the patch content
-            import re
-
-            fpb_marker_pattern = re.findall(
-                r"/\*\s*FPB_INJECT\s*\*/.*?(\w+)\s*\(", patch_content, re.DOTALL
-            )
-            if fpb_marker_pattern:
-                logger.info(
-                    f"Found FPB_INJECT marked functions in patch: {fpb_marker_pattern[:5]}"
-                )
-            else:
-                logger.warning(
-                    "No FPB_INJECT marked functions found in generated patch!"
-                )
-                logger.warning(
-                    f"Patch content (first 2000 chars):\n{patch_content[:2000]}"
-                )
-
-            # Update patch source
-            device.patch_source_content = patch_content
+            # Update patch source (read original file for display)
+            with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                device.patch_source_content = f.read()
 
             # Step 3: Check if device is connected
             if device.ser is None or not device.ser.isOpen():
@@ -341,10 +312,11 @@ def _trigger_auto_inject(file_path):
                 device.auto_inject_progress = 80
                 device.auto_inject_last_update = time.time()
 
-                # Use inject_multi for multi-function injection
-                # Each inject_* function gets its own Slot with smart reuse
+                # Use inject_multi for multi-function injection (in-place mode)
+                # Each inject function gets its own Slot with smart reuse
                 success, result = fpb.inject_multi(
-                    source_content=patch_content,
+                    source_file=file_path,
+                    inject_functions=marked,
                     patch_mode=device.patch_mode,
                     source_ext=source_ext,
                     original_source_file=file_path,

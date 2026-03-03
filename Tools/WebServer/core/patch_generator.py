@@ -160,6 +160,44 @@ class PatchGenerator:
 
         return patch_content, marked_functions
 
+    def generate_patch_inplace(
+        self,
+        file_path: str,
+    ) -> Tuple[Optional[str], List[str]]:
+        """
+        In-place mode: detect FPB_INJECT markers and return file path + function list.
+
+        No source code copying or modification is performed. The original file
+        will be compiled directly, and the linker script will use KEEP(.text.func)
+        to select only the marked functions.
+
+        Args:
+            file_path: Path to the source file with FPB_INJECT markers
+
+        Returns:
+            Tuple of (file_path, list_of_marked_function_names)
+            Returns (None, []) if no markers found.
+        """
+        if not os.path.exists(file_path):
+            logger.error(f"File not found: {file_path}")
+            return None, []
+
+        with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+
+        marked_functions = self.find_marked_functions(content)
+
+        if not marked_functions:
+            logger.warning(f"No FPB_INJECT markers found in {file_path}")
+            return None, []
+
+        logger.info(
+            f"In-place mode: found {len(marked_functions)} functions "
+            f"in {file_path}: {marked_functions}"
+        )
+
+        return file_path, marked_functions
+
     def _process_content(
         self,
         content: str,
@@ -198,9 +236,6 @@ class PatchGenerator:
         # Process each line
         for i, line in enumerate(lines):
             processed_line = line
-
-            # Convert relative includes to absolute
-            processed_line = self._convert_include_path(processed_line, source_dir)
 
             # Check if this line contains FPB_INJECT marker
             if self._is_marker_line(processed_line):
@@ -250,128 +285,6 @@ class PatchGenerator:
             if re.search(pattern, line):
                 return True
         return False
-
-    # Note: _rename_function method removed in v2.1
-    # Functions are no longer renamed to inject_xxx
-    # Instead, section attribute is added to marked functions
-
-    def _convert_include_path(self, line: str, source_dir: str) -> str:
-        """
-        Convert relative #include paths to absolute paths.
-
-        Examples:
-            #include "lv_mem.h"          -> #include "/abs/path/to/lv_mem.h"
-            #include "../misc/lv_log.h"  -> #include "/abs/path/to/misc/lv_log.h"
-            #include <stdio.h>           -> unchanged (unless found in source tree)
-            #include <local_header.h>    -> #include "/abs/path/to/local_header.h" (if found)
-        """
-        # Handle double-quoted includes
-        match = re.match(r'^(\s*#\s*include\s*)"([^"]+)"(.*)', line)
-        if match:
-            prefix = match.group(1)
-            include_path = match.group(2)
-            suffix = match.group(3)
-
-            # Skip if already absolute
-            if os.path.isabs(include_path):
-                return line
-
-            # Resolve relative path
-            abs_path = os.path.normpath(os.path.join(source_dir, include_path))
-
-            # Only convert if file exists
-            if os.path.exists(abs_path):
-                return f'{prefix}"{abs_path}"{suffix}'
-
-            return line
-
-        # Handle angle-bracket includes - try to find in source directory tree
-        match = re.match(r"^(\s*#\s*include\s*)<([^>]+)>(.*)", line)
-        if match:
-            prefix = match.group(1)
-            include_path = match.group(2)
-            suffix = match.group(3)
-
-            # Skip standard library headers (heuristic: no path separator and common names)
-            std_headers = {
-                "stdio.h",
-                "stdlib.h",
-                "string.h",
-                "stdint.h",
-                "stdbool.h",
-                "stddef.h",
-                "stdarg.h",
-                "limits.h",
-                "math.h",
-                "time.h",
-                "assert.h",
-                "errno.h",
-                "signal.h",
-                "setjmp.h",
-                "ctype.h",
-                "locale.h",
-                "float.h",
-                "iso646.h",
-                "wchar.h",
-                "wctype.h",
-                "complex.h",
-                "fenv.h",
-                "inttypes.h",
-                "tgmath.h",
-            }
-            if include_path in std_headers:
-                return line
-
-            # Search for the header in source directory and parent directories
-            search_dir = source_dir
-            for _ in range(5):  # Search up to 5 levels up
-                if not search_dir or not os.path.isdir(search_dir):
-                    break
-
-                # Try direct path
-                abs_path = os.path.normpath(os.path.join(search_dir, include_path))
-                if os.path.exists(abs_path):
-                    # Convert to double-quoted include with absolute path
-                    return f'{prefix}"{abs_path}"{suffix}'
-
-                # Search recursively in this directory (limited depth)
-                for root, dirs, files in os.walk(search_dir):
-                    # Limit search depth
-                    depth = root[len(search_dir) :].count(os.sep)
-                    if depth > 3:
-                        dirs[:] = []
-                        continue
-
-                    # Skip common non-source directories
-                    dirs[:] = [
-                        d
-                        for d in dirs
-                        if d
-                        not in [
-                            ".git",
-                            "build",
-                            "out",
-                            "__pycache__",
-                            "node_modules",
-                            ".svn",
-                            ".hg",
-                            "CMakeFiles",
-                        ]
-                    ]
-
-                    # Check if the header exists here
-                    header_name = os.path.basename(include_path)
-                    if header_name in files:
-                        abs_path = os.path.join(root, header_name)
-                        # Verify it's the right file (path suffix matches)
-                        if include_path == header_name or abs_path.endswith(
-                            include_path
-                        ):
-                            return f'{prefix}"{abs_path}"{suffix}'
-
-                search_dir = os.path.dirname(search_dir)
-
-        return line
 
     def generate_patch_from_file(
         self,

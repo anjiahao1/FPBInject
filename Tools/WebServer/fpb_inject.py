@@ -272,15 +272,17 @@ class FPBInject:
 
     def compile_inject(
         self,
-        source_content: str,
-        base_addr: int,
+        source_content: str = None,
+        base_addr: int = 0,
         elf_path: str = None,
         compile_commands_path: str = None,
         verbose: bool = False,
         source_ext: str = None,
         original_source_file: str = None,
+        source_file: str = None,
+        inject_functions: list = None,
     ) -> Tuple[Optional[bytes], Optional[Dict[str, int]], str]:
-        """Compile injection code from source content to binary."""
+        """Compile injection code from source content or file to binary."""
         return compiler_utils.compile_inject(
             source_content=source_content,
             base_addr=base_addr,
@@ -290,6 +292,8 @@ class FPBInject:
             source_ext=source_ext,
             original_source_file=original_source_file,
             toolchain_path=self._toolchain_path,
+            source_file=source_file,
+            inject_functions=inject_functions,
         )
 
     # ========== Injection Workflow ==========
@@ -353,14 +357,16 @@ class FPBInject:
 
     def inject(
         self,
-        source_content: str,
-        target_func: str,
+        source_content: str = None,
+        target_func: str = None,
         inject_func: str = None,
         patch_mode: str = "trampoline",
         comp: int = -1,
         progress_callback=None,
         source_ext: str = None,
         original_source_file: str = None,
+        source_file: str = None,
+        inject_functions: list = None,
     ) -> Tuple[bool, dict]:
         """Perform full injection workflow."""
         result = {
@@ -410,12 +416,14 @@ class FPBInject:
         compile_start = time.time()
 
         data, inject_symbols, error = self.compile_inject(
-            source_content,
-            0x20000000,
-            elf_path,
-            self.device.compile_commands_path,
+            source_content=source_content,
+            base_addr=0x20000000,
+            elf_path=elf_path,
+            compile_commands_path=self.device.compile_commands_path,
             source_ext=source_ext,
             original_source_file=original_source_file,
+            source_file=source_file,
+            inject_functions=inject_functions,
         )
         if error:
             return False, {"error": error}
@@ -432,12 +440,14 @@ class FPBInject:
         base_addr = aligned_addr
 
         data, inject_symbols, error = self.compile_inject(
-            source_content,
-            base_addr,
-            elf_path,
-            self.device.compile_commands_path,
+            source_content=source_content,
+            base_addr=base_addr,
+            elf_path=elf_path,
+            compile_commands_path=self.device.compile_commands_path,
             source_ext=source_ext,
             original_source_file=original_source_file,
+            source_file=source_file,
+            inject_functions=inject_functions,
         )
         if error:
             return False, {"error": error}
@@ -522,17 +532,20 @@ class FPBInject:
 
     def inject_multi(
         self,
-        source_content: str,
+        source_content: str = None,
         patch_mode: str = "trampoline",
         progress_callback=None,
         source_ext: str = None,
         original_source_file: str = None,
+        source_file: str = None,
+        inject_functions: list = None,
     ) -> Tuple[bool, dict]:
         """
         Perform multi-function injection workflow.
 
-        Each inject_<target_func> function in the source gets its own Slot
-        with independent memory allocation.
+        Supports two modes:
+        1. Content mode (legacy): source_content contains the patch code.
+        2. In-place mode: source_file + inject_functions for direct compilation.
         """
         result = {
             "compile_time": 0,
@@ -552,12 +565,14 @@ class FPBInject:
         elf_symbols = self.get_symbols(elf_path)
 
         data, inject_symbols, error = self.compile_inject(
-            source_content,
-            0x20000000,
-            elf_path,
-            self.device.compile_commands_path,
+            source_content=source_content,
+            base_addr=0x20000000,
+            elf_path=elf_path,
+            compile_commands_path=self.device.compile_commands_path,
             source_ext=source_ext,
             original_source_file=original_source_file,
+            source_file=source_file,
+            inject_functions=inject_functions,
         )
         if error:
             return False, {"error": error}
@@ -623,6 +638,8 @@ class FPBInject:
                 progress_callback=progress_callback,
                 source_ext=source_ext,
                 original_source_file=original_source_file,
+                source_file=source_file,
+                inject_functions=inject_functions,
             )
 
             injection_entry = {

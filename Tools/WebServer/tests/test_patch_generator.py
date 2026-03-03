@@ -288,16 +288,11 @@ void func(void) { }
 
             os.unlink(f.name)
 
-    def test_generate_patch_converts_include_paths(self):
-        """Test relative include path conversion"""
+    def test_generate_patch_preserves_include_paths(self):
+        """Test that include paths are preserved as-is (no conversion)"""
         # Create a temporary directory structure
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create header file
-            header_path = os.path.join(tmpdir, "my_header.h")
-            with open(header_path, "w") as h:
-                h.write("#define TEST 1\n")
-
-            # Create source file
+            # Create source file with relative include
             source_path = os.path.join(tmpdir, "source.c")
             content = """
 #include "my_header.h"
@@ -310,8 +305,8 @@ void func(void) { }
 
             patch_content, _ = self.gen.generate_patch(source_path)
 
-            # Verify path is converted to absolute path
-            self.assertIn(header_path, patch_content)
+            # Include path should be preserved as-is (not converted to absolute)
+            self.assertIn('#include "my_header.h"', patch_content)
 
 
 class TestSectionAttribute(unittest.TestCase):
@@ -385,43 +380,6 @@ class TestSectionAttribute(unittest.TestCase):
             self.assertEqual(count, 1)
 
             os.unlink(f.name)
-
-
-class TestConvertIncludePath(unittest.TestCase):
-    """Test include path conversion"""
-
-    def setUp(self):
-        self.gen = PatchGenerator()
-
-    def test_convert_relative_path(self):
-        """Test converting relative path"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create header file
-            header = os.path.join(tmpdir, "header.h")
-            with open(header, "w") as f:
-                f.write("")
-
-            line = '#include "header.h"'
-            result = self.gen._convert_include_path(line, tmpdir)
-            self.assertIn(header, result)
-
-    def test_keep_system_include(self):
-        """Test keeping system include"""
-        line = "#include <stdio.h>"
-        result = self.gen._convert_include_path(line, "/tmp")
-        self.assertEqual(result, line)
-
-    def test_keep_absolute_path(self):
-        """Test keeping existing absolute path"""
-        line = '#include "/abs/path/header.h"'
-        result = self.gen._convert_include_path(line, "/tmp")
-        self.assertEqual(result, line)
-
-    def test_keep_nonexistent_relative(self):
-        """Test keeping nonexistent relative path"""
-        line = '#include "nonexistent.h"'
-        result = self.gen._convert_include_path(line, "/tmp")
-        self.assertEqual(result, line)
 
 
 class TestGeneratePatchFromFile(unittest.TestCase):

@@ -14,7 +14,7 @@ import os
 import re
 import subprocess
 import tempfile
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from utils.toolchain import get_tool_path, get_subprocess_env
 from core.compile_commands import parse_compile_commands
@@ -24,20 +24,27 @@ logger = logging.getLogger(__name__)
 
 
 def compile_inject(
-    source_content: str,
-    base_addr: int,
+    source_content: str = None,
+    base_addr: int = 0,
     elf_path: str = None,
     compile_commands_path: str = None,
     verbose: bool = False,
     source_ext: str = None,
     original_source_file: str = None,
     toolchain_path: Optional[str] = None,
+    source_file: str = None,
+    inject_functions: List[str] = None,
 ) -> Tuple[Optional[bytes], Optional[Dict[str, int]], str]:
     """
     Compile injection code from source content to binary.
 
+    Supports two modes:
+    1. Content mode (legacy): source_content is written to a temp file and compiled.
+    2. In-place mode: source_file is compiled directly, inject_functions specifies
+       which functions to keep via linker script KEEP(.text.func).
+
     Args:
-        source_content: Source code content to compile
+        source_content: Source code content to compile (content mode)
         base_addr: Base address for injection code
         elf_path: Path to main ELF for symbol resolution
         compile_commands_path: Path to compile_commands.json
@@ -45,13 +52,28 @@ def compile_inject(
         source_ext: Source file extension (.c or .cpp), auto-detect if None
         original_source_file: Path to original source file for matching compile flags
         toolchain_path: Path to toolchain binaries
+        source_file: Path to source file to compile in-place (in-place mode)
+        inject_functions: List of function names to keep (in-place mode)
 
     Returns:
         Tuple of (binary_data, symbols, error_message)
     """
-    logger.info(
-        f"compile_inject called with original_source_file={original_source_file}"
-    )
+    # Determine compilation mode
+    inplace_mode = source_file is not None and os.path.exists(source_file)
+    if inplace_mode:
+        logger.info(
+            f"compile_inject in-place mode: source_file={source_file}, "
+            f"inject_functions={inject_functions}"
+        )
+        # Use source_file as original_source_file for compile flag matching
+        if not original_source_file:
+            original_source_file = source_file
+    else:
+        logger.info(
+            f"compile_inject called with original_source_file={original_source_file}"
+        )
+        if source_content is None:
+            return (None, None, "No source content or source file provided.")
     config = None
     if compile_commands_path:
         config = parse_compile_commands(
@@ -81,15 +103,19 @@ def compile_inject(
     cflags = config.get("cflags", [])
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Determine file extension: use provided or default to .c
-        ext = source_ext if source_ext else ".c"
-        if not ext.startswith("."):
-            ext = "." + ext
-
-        # Write source to file
-        source_file = os.path.join(tmpdir, f"inject{ext}")
-        with open(source_file, "w") as f:
-            f.write(source_content)
+        if inplace_mode:
+            # In-place mode: compile the original file directly
+            compile_source = source_file
+            if not source_ext:
+                source_ext = os.path.splitext(source_file)[1]
+        else:
+            # Content mode: write source to temp file
+            ext = source_ext if source_ext else ".c"
+            if not ext.startswith("."):
+                ext = "." + ext
+            compile_source = os.path.join(tmpdir, f"inject{ext}")
+            with open(compile_source, "w") as f:
+                f.write(source_content)
 
         obj_file = os.path.join(tmpdir, "inject.o")
         elf_file = os.path.join(tmpdir, "inject.elf")
@@ -126,7 +152,7 @@ def compile_inject(
                     cmd.append(token)
                     i += 1
             # Add our source file and -Wno-error
-            cmd.extend(["-Wno-error", source_file])
+            cmd.extend(["-Wno-error", compile_source])
             logger.info("Using raw command from .d file (passthrough)")
         else:
             # Build command from parsed components
@@ -148,7 +174,7 @@ def compile_inject(
             for d in defines:
                 cmd.extend(["-D", d])
 
-            cmd.extend(["-o", obj_file, source_file])
+            cmd.extend(["-o", obj_file, compile_source])
 
         if verbose:
             logger.info(f"Compile: {' '.join(cmd)}")
@@ -163,14 +189,31 @@ def compile_inject(
         # Note: We include .bss in the binary by adding a marker section after it.
         # This ensures that static/global variables with zero initialization
         # are properly zeroed in the uploaded binary.
+        # Build text section KEEP rules
+        if inplace_mode and inject_functions:
+            # In-place mode: use KEEP(.text.func) for each target function
+            keep_rules = "\n".join(
+                f"        KEEP(*(.text.{func}))  /* inject: {func} */"
+                for func in inject_functions
+            )
+            text_section = f"""
+    .text : {{
+{keep_rules}
+        KEEP(*(.fpb.text))     /* FPB inject functions (legacy) */
+        *(.text .text.*)
+    }}"""
+        else:
+            # Content mode: use .fpb.text section
+            text_section = """
+    .text : {
+        KEEP(*(.fpb.text))     /* FPB inject functions */
+        *(.text .text.*)
+    }"""
+
         ld_content = f"""
 SECTIONS
 {{
-    . = 0x{base_addr:08X};
-    .text : {{
-        KEEP(*(.fpb.text))     /* FPB inject functions */
-        *(.text .text.*)
-    }}
+    . = 0x{base_addr:08X};{text_section}
     .rodata : {{ *(.rodata .rodata.*) }}
     .data : {{ *(.data .data.*) }}
     .bss : {{
@@ -197,24 +240,30 @@ SECTIONS
         link_cmd.append("-Wl,--gc-sections")
         link_cmd.append("-Wl,--allow-multiple-definition")
 
-        # Find FPB_INJECT marked functions from source to keep them with -u
-        # Pattern: /* FPB_INJECT */ followed by optional __attribute__ and function definition
-        # Use .*? with DOTALL to handle __attribute__((...)) with nested parentheses
-        fpb_marker_pattern = re.compile(
-            r"/\*\s*FPB_INJECT\s*\*/\s*\n"
-            r"(?:__attribute__\s*\(\(.*?\)\)\s*\n?)?"
-            r"(?:extern\s+\"C\"\s+)?"
-            r"(?:static\s+|inline\s+|const\s+|volatile\s+)*"
-            r"(?:void|int|char|unsigned|signed|long|short|float|double|"
-            r"uint\d+_t|int\d+_t|size_t|ssize_t|bool|_Bool|"
-            r"\w+\s*\*?)\s+"
-            r"(\w+)\s*\(",
-            re.MULTILINE | re.IGNORECASE | re.DOTALL,
-        )
-        fpb_funcs = fpb_marker_pattern.findall(source_content)
-        for func in set(fpb_funcs):
-            if func not in ("if", "while", "for", "switch", "return"):
+        # Determine functions to keep with -u (undefined symbol reference)
+        if inplace_mode and inject_functions:
+            # In-place mode: use provided function list
+            fpb_funcs = list(inject_functions)
+            for func in fpb_funcs:
                 link_cmd.append(f"-Wl,-u,{func}")
+        else:
+            # Content mode: find FPB_INJECT marked functions from source
+            scan_content = source_content or ""
+            fpb_marker_pattern = re.compile(
+                r"/\*\s*FPB_INJECT\s*\*/\s*\n"
+                r"(?:__attribute__\s*\(\(.*?\)\)\s*\n?)?"
+                r"(?:extern\s+\"C\"\s+)?"
+                r"(?:static\s+|inline\s+|const\s+|volatile\s+)*"
+                r"(?:void|int|char|unsigned|signed|long|short|float|double|"
+                r"uint\d+_t|int\d+_t|size_t|ssize_t|bool|_Bool|"
+                r"\w+\s*\*?)\s+"
+                r"(\w+)\s*\(",
+                re.MULTILINE | re.IGNORECASE | re.DOTALL,
+            )
+            fpb_funcs = fpb_marker_pattern.findall(scan_content)
+            for func in set(fpb_funcs):
+                if func not in ("if", "while", "for", "switch", "return"):
+                    link_cmd.append(f"-Wl,-u,{func}")
 
         # IMPORTANT: obj_file MUST come BEFORE --just-symbols!
         # With --allow-multiple-definition, the linker uses the FIRST definition.
