@@ -190,24 +190,16 @@ framework.init(mocks, w);
 
 console.log('Running tests...\n');
 
-require('./js/test_state')(w);
-require('./js/test_theme')(w);
-require('./js/test_terminal')(w);
-require('./js/test_connection')(w);
-require('./js/test_logs')(w);
-require('./js/test_slots')(w);
-require('./js/test_ui')(w);
-require('./js/test_sash')(w);
-require('./js/test_sidebar')(w);
-require('./js/test_patch')(w);
-require('./js/test_editor')(w);
-require('./js/test_config')(w);
-require('./js/test_config_schema')(w);
-require('./js/test_log_file')(w);
-require('./js/test_features')(w);
-require('./js/test_elfwatcher')(w);
-require('./js/test_transfer')(w);
-require('./js/test_quick_commands')(w);
+// Auto-discover all test_*.js files in tests/js/
+const testDir = path.join(__dirname, 'js');
+const testFiles = fs
+  .readdirSync(testDir)
+  .filter((f) => f.startsWith('test_') && f.endsWith('.js'))
+  .sort();
+
+testFiles.forEach((file) => {
+  require(path.join(testDir, file))(w);
+});
 
 // Wait for all async tests to complete then report results
 (async () => {
