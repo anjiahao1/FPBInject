@@ -9,6 +9,7 @@ const QC_STORAGE_KEY = 'fpbinject-quick-commands';
 let qcEditingId = null; // ID of command being edited, null = new
 let qcContextTargetId = null; // ID of command for context menu
 let qcMacroAbort = null; // AbortController for macro execution
+let qcExecuting = false; // Mutex: prevent concurrent command execution
 
 /* ===========================
    STORAGE
@@ -181,9 +182,17 @@ async function executeQuickCommand(id) {
     return;
   }
 
+  if (qcExecuting) {
+    if (typeof log !== 'undefined')
+      log.warn('A command is already executing, please wait');
+    return;
+  }
+
   const commands = loadQuickCommands();
   const cmd = commands.find((c) => c.id === id);
   if (!cmd) return;
+
+  qcExecuting = true;
 
   // Visual feedback
   const itemEl = document.querySelector('.qc-item[data-id="' + id + '"]');
@@ -200,6 +209,7 @@ async function executeQuickCommand(id) {
       await sendTerminalCommand(data);
     }
   } finally {
+    qcExecuting = false;
     if (itemEl) {
       setTimeout(() => itemEl.classList.remove('executing'), 300);
     }
@@ -248,6 +258,7 @@ function stopMacroExecution() {
     qcMacroAbort.abort();
     qcMacroAbort = null;
   }
+  qcExecuting = false;
 }
 
 async function sendSerialData(data) {
