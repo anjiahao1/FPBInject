@@ -1,0 +1,183 @@
+<!-- Quick Commands Section -->
+<div class="sidebar-section" data-section-id="quick-commands">
+  <details id="details-quick-commands">
+    <summary class="sidebar-header">
+      <i class="codicon codicon-chevron-right"></i>
+      <span data-i18n="sidebar.quick_commands">QUICK COMMANDS</span>
+      <span class="sidebar-header-actions">
+        <button
+          class="vscode-btn icon-only secondary"
+          onclick="
+            event.stopPropagation();
+            showQuickCommandMenu(event);
+          "
+          title="More Actions"
+          data-i18n="[title]tooltips.more_actions"
+        >
+          <i class="codicon codicon-ellipsis"></i>
+        </button>
+        <button
+          class="vscode-btn icon-only secondary"
+          onclick="
+            event.stopPropagation();
+            openQuickCommandEditor();
+          "
+          title="New Command"
+          data-i18n="[title]quick_commands.new_command"
+        >
+          <i class="codicon codicon-add"></i>
+        </button>
+      </span>
+    </summary>
+    <div class="sidebar-content" style="display: flex; flex-direction: column; padding: 0">
+      <div id="quickCommandList" class="quick-command-list">
+        <div class="empty" style="padding: 8px; font-size: 11px; opacity: 0.7" data-i18n="quick_commands.empty">
+          No commands yet
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-section-resize-handle"></div>
+  </details>
+</div>
+
+<!-- Quick Command Editor Modal -->
+<div class="modal-overlay" id="quickCommandEditorModal">
+  <div class="modal" style="width: 520px">
+    <div class="modal-header">
+      <h3 style="margin: 0" id="quickCommandEditorTitle" data-i18n="quick_commands.new_command">New Command</h3>
+      <button class="vscode-btn icon-only secondary" onclick="closeQuickCommandEditor()">
+        <i class="codicon codicon-close"></i>
+      </button>
+    </div>
+    <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px">
+      <!-- Type selector -->
+      <div class="flex-row" style="gap: 12px">
+        <label class="qc-radio-label">
+          <input type="radio" name="qcType" value="single" checked onchange="onQcTypeChange()" />
+          <span data-i18n="quick_commands.single_command">Single Command</span>
+        </label>
+        <label class="qc-radio-label">
+          <input type="radio" name="qcType" value="macro" onchange="onQcTypeChange()" />
+          <span data-i18n="quick_commands.command_macro">Command Macro</span>
+        </label>
+      </div>
+
+      <!-- Name -->
+      <div>
+        <label class="qc-label" data-i18n="quick_commands.name">Name</label>
+        <input
+          type="text"
+          id="qcName"
+          class="vscode-input"
+          style="width: 100%"
+          placeholder="e.g. ps -A"
+          data-i18n="[placeholder]quick_commands.name_placeholder"
+        />
+      </div>
+
+      <!-- Single command input -->
+      <div id="qcSingleSection">
+        <label class="qc-label" data-i18n="quick_commands.command">Command</label>
+        <input
+          type="text"
+          id="qcCommand"
+          class="vscode-input"
+          style="width: 100%; font-family: monospace"
+          placeholder="e.g. ps -A"
+          data-i18n="[placeholder]quick_commands.command_placeholder"
+        />
+        <label class="qc-checkbox-label" style="margin-top: 6px">
+          <input type="checkbox" id="qcAppendNewline" checked />
+          <span data-i18n="quick_commands.append_newline">Append newline (\n)</span>
+        </label>
+      </div>
+
+      <!-- Macro steps -->
+      <div id="qcMacroSection" style="display: none">
+        <label class="qc-label" data-i18n="quick_commands.steps">Steps</label>
+        <div id="qcStepList" class="qc-step-list"></div>
+        <button class="vscode-btn secondary" style="margin-top: 6px; font-size: 11px" onclick="addMacroStep()">
+          <i class="codicon codicon-add"></i>
+          <span data-i18n="quick_commands.add_step">Add Step</span>
+        </button>
+        <div id="qcMacroSummary" class="qc-macro-summary"></div>
+      </div>
+
+      <!-- Group -->
+      <div>
+        <label class="qc-label" data-i18n="quick_commands.group">Group</label>
+        <div class="flex-row">
+          <select id="qcGroup" class="vscode-select" style="flex: 1" onchange="onQcGroupChange()">
+            <option value="" data-i18n="quick_commands.no_group">No Group</option>
+          </select>
+          <input
+            type="text"
+            id="qcNewGroup"
+            class="vscode-input"
+            style="flex: 1; display: none"
+            placeholder="Group name"
+            data-i18n="[placeholder]quick_commands.group_name_placeholder"
+          />
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button
+        class="vscode-btn secondary"
+        id="qcTestRunBtn"
+        onclick="testRunQuickCommand()"
+        style="margin-right: auto"
+        data-i18n="quick_commands.test_run"
+      >
+        Test Run
+      </button>
+      <button class="vscode-btn secondary" onclick="closeQuickCommandEditor()" data-i18n="buttons.cancel">
+        Cancel
+      </button>
+      <button class="vscode-btn" onclick="saveQuickCommand()" data-i18n="buttons.save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Quick Command Context Menu -->
+<div class="qc-context-menu" id="qcContextMenu" style="display: none">
+  <div class="qc-context-item" onclick="qcContextAction('execute')">
+    <i class="codicon codicon-play"></i>
+    <span data-i18n="quick_commands.execute">Execute</span>
+  </div>
+  <div class="qc-context-item" onclick="qcContextAction('edit')">
+    <i class="codicon codicon-edit"></i>
+    <span data-i18n="quick_commands.edit">Edit</span>
+  </div>
+  <div class="qc-context-item" onclick="qcContextAction('duplicate')">
+    <i class="codicon codicon-copy"></i>
+    <span data-i18n="quick_commands.duplicate">Duplicate</span>
+  </div>
+  <div class="qc-context-separator"></div>
+  <div class="qc-context-item" onclick="qcContextAction('move')">
+    <i class="codicon codicon-folder"></i>
+    <span data-i18n="quick_commands.move_to_group">Move to Group...</span>
+  </div>
+  <div class="qc-context-separator"></div>
+  <div class="qc-context-item danger" onclick="qcContextAction('delete')">
+    <i class="codicon codicon-trash"></i>
+    <span data-i18n="quick_commands.delete">Delete</span>
+  </div>
+</div>
+
+<!-- Quick Command Section Menu (import/export) -->
+<div class="qc-context-menu" id="qcSectionMenu" style="display: none">
+  <div class="qc-context-item" onclick="importQuickCommands()">
+    <i class="codicon codicon-cloud-download"></i>
+    <span data-i18n="quick_commands.import">Import Commands...</span>
+  </div>
+  <div class="qc-context-item" onclick="exportQuickCommands()">
+    <i class="codicon codicon-cloud-upload"></i>
+    <span data-i18n="quick_commands.export">Export All...</span>
+  </div>
+  <div class="qc-context-separator"></div>
+  <div class="qc-context-item danger" onclick="clearAllQuickCommands()">
+    <i class="codicon codicon-clear-all"></i>
+    <span data-i18n="quick_commands.clear_all">Clear All</span>
+  </div>
+</div>

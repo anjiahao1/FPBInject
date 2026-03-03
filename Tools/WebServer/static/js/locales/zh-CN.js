@@ -14,6 +14,7 @@ window.i18nResources['zh-CN'] = {
       transfer: '文件传输',
       symbols: '符号',
       file_transfer: '文件传输',
+      quick_commands: '快捷指令',
     },
 
     // 配置组
@@ -213,6 +214,45 @@ window.i18nResources['zh-CN'] = {
       no_file_open: '未打开文件',
     },
 
+    // 快捷指令
+    quick_commands: {
+      new_command: '新建命令',
+      edit_command: '编辑命令',
+      single_command: '单条命令',
+      command_macro: '命令组合',
+      name: '名称',
+      name_placeholder: '例如 ps -A',
+      command: '命令',
+      command_placeholder: '例如 ps -A',
+      append_newline: '追加换行符 (\\n)',
+      steps: '步骤',
+      add_step: '添加步骤',
+      group: '分组',
+      no_group: '无分组',
+      new_group: '+ 新建分组...',
+      group_name_placeholder: '分组名称',
+      test_run: '试运行',
+      execute: '执行',
+      edit: '编辑',
+      duplicate: '复制',
+      delete: '删除',
+      move_to_group: '移动到分组...',
+      import: '导入命令...',
+      export: '导出全部...',
+      clear_all: '清空全部',
+      empty: '暂无命令',
+      unnamed: '命令',
+      unnamed_macro: '宏',
+      macro_summary: '共 {{count}} 条命令，约 {{seconds}} 秒',
+      confirm_delete: '删除「{{name}}」？',
+      confirm_clear: '删除全部 {{count}} 条命令？',
+      nothing_to_export: '没有可导出的命令',
+      invalid_format: '文件格式无效',
+      import_error: '导入失败：',
+      imported_count: '已导入 {{count}} 条命令',
+      move_prompt: '输入分组名称（留空取消分组）：',
+    },
+
     // 传输
     transfer: {
       file: '文件',
@@ -244,6 +284,8 @@ window.i18nResources['zh-CN'] = {
       activity_transfer: '文件传输',
       activity_symbols: '符号',
       activity_config: '配置',
+      activity_quick_commands: '快捷指令',
+      more_actions: '更多操作',
       // 设备
       ping: '检测设备是否已连接并响应',
       info: '获取设备 FPB 硬件信息',

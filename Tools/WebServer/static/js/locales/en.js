@@ -14,6 +14,7 @@ window.i18nResources['en'] = {
       transfer: 'TRANSFER',
       symbols: 'SYMBOLS',
       file_transfer: 'FILE TRANSFER',
+      quick_commands: 'QUICK COMMANDS',
     },
 
     // Config groups
@@ -220,6 +221,45 @@ window.i18nResources['en'] = {
       no_file_open: 'No file open',
     },
 
+    // Quick Commands
+    quick_commands: {
+      new_command: 'New Command',
+      edit_command: 'Edit Command',
+      single_command: 'Single Command',
+      command_macro: 'Command Macro',
+      name: 'Name',
+      name_placeholder: 'e.g. ps -A',
+      command: 'Command',
+      command_placeholder: 'e.g. ps -A',
+      append_newline: 'Append newline (\\n)',
+      steps: 'Steps',
+      add_step: 'Add Step',
+      group: 'Group',
+      no_group: 'No Group',
+      new_group: '+ New Group...',
+      group_name_placeholder: 'Group name',
+      test_run: 'Test Run',
+      execute: 'Execute',
+      edit: 'Edit',
+      duplicate: 'Duplicate',
+      delete: 'Delete',
+      move_to_group: 'Move to Group...',
+      import: 'Import Commands...',
+      export: 'Export All...',
+      clear_all: 'Clear All',
+      empty: 'No commands yet',
+      unnamed: 'Command',
+      unnamed_macro: 'Macro',
+      macro_summary: 'Total: {{count}} commands, ~{{seconds}}s',
+      confirm_delete: 'Delete "{{name}}"?',
+      confirm_clear: 'Delete all {{count}} commands?',
+      nothing_to_export: 'No commands to export',
+      invalid_format: 'Invalid file format',
+      import_error: 'Failed to import: ',
+      imported_count: 'Imported {{count}} commands',
+      move_prompt: 'Enter group name (empty to ungroup):',
+    },
+
     // Transfer
     transfer: {
       file: 'File',
@@ -251,6 +291,8 @@ window.i18nResources['en'] = {
       activity_transfer: 'File Transfer',
       activity_symbols: 'Symbols',
       activity_config: 'Configuration',
+      activity_quick_commands: 'Quick Commands',
+      more_actions: 'More Actions',
       // Device
       ping: 'Detect if device is connected and responsive',
       info: 'Get device FPB hardware information',

@@ -14,6 +14,7 @@ window.i18nResources['zh-TW'] = {
       transfer: '檔案傳輸',
       symbols: '符號',
       file_transfer: '檔案傳輸',
+      quick_commands: '快捷指令',
     },
 
     // 設定組
@@ -213,6 +214,45 @@ window.i18nResources['zh-TW'] = {
       no_file_open: '未開啟檔案',
     },
 
+    // 快捷指令
+    quick_commands: {
+      new_command: '新增指令',
+      edit_command: '編輯指令',
+      single_command: '單條指令',
+      command_macro: '指令組合',
+      name: '名稱',
+      name_placeholder: '例如 ps -A',
+      command: '指令',
+      command_placeholder: '例如 ps -A',
+      append_newline: '附加換行符 (\\n)',
+      steps: '步驟',
+      add_step: '新增步驟',
+      group: '分組',
+      no_group: '無分組',
+      new_group: '+ 新增分組...',
+      group_name_placeholder: '分組名稱',
+      test_run: '試執行',
+      execute: '執行',
+      edit: '編輯',
+      duplicate: '複製',
+      delete: '刪除',
+      move_to_group: '移至分組...',
+      import: '匯入指令...',
+      export: '匯出全部...',
+      clear_all: '清除全部',
+      empty: '尚無指令',
+      unnamed: '指令',
+      unnamed_macro: '巨集',
+      macro_summary: '共 {{count}} 條指令，約 {{seconds}} 秒',
+      confirm_delete: '刪除「{{name}}」？',
+      confirm_clear: '刪除全部 {{count}} 條指令？',
+      nothing_to_export: '沒有可匯出的指令',
+      invalid_format: '檔案格式無效',
+      import_error: '匯入失敗：',
+      imported_count: '已匯入 {{count}} 條指令',
+      move_prompt: '輸入分組名稱（留空取消分組）：',
+    },
+
     // 傳輸
     transfer: {
       file: '檔案',
@@ -244,6 +284,8 @@ window.i18nResources['zh-TW'] = {
       activity_transfer: '檔案傳輸',
       activity_symbols: '符號',
       activity_config: '設定',
+      activity_quick_commands: '快捷指令',
+      more_actions: '更多操作',
       // 裝置
       ping: '檢測裝置是否已連線並回應',
       info: '取得裝置 FPB 硬體資訊',

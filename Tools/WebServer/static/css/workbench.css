@@ -2003,3 +2003,249 @@ details[open] > .sidebar-content {
     width: 64px;
   }
 }
+
+/* ===========================
+   QUICK COMMANDS
+   =========================== */
+
+/* --- Command list --- */
+.quick-command-list {
+  overflow-y: auto;
+  max-height: 400px;
+  font-size: 12px;
+}
+
+/* --- Command item --- */
+.qc-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: background 0.1s ease;
+  user-select: none;
+}
+
+.qc-item:hover {
+  background: var(--vscode-list-hover);
+}
+
+.qc-item.executing {
+  animation: pulseGlow 0.3s ease;
+}
+
+.qc-item-icon {
+  font-size: 14px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.qc-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--vscode-editor-font-family, monospace);
+  font-size: 11px;
+}
+
+.qc-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: var(--vscode-badge-bg, #4d4d4d);
+  color: var(--vscode-badge-fg, #ccc);
+  flex-shrink: 0;
+}
+
+.qc-item-actions {
+  display: none;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.qc-item:hover .qc-item-actions {
+  display: flex;
+}
+
+.qc-action-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.6;
+}
+
+.qc-action-btn:hover {
+  opacity: 1;
+  background: var(--vscode-list-hover);
+}
+
+/* --- Groups --- */
+.qc-group {
+  margin: 0;
+}
+
+.qc-group-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.qc-group-header:hover {
+  background: var(--vscode-list-hover);
+}
+
+.qc-group-chevron {
+  font-size: 12px;
+  transition: transform 0.15s ease;
+}
+
+.qc-group.collapsed .qc-group-chevron {
+  transform: rotate(-90deg);
+}
+
+.qc-group.collapsed .qc-group-items {
+  display: none;
+}
+
+.qc-group-items {
+  padding-left: 8px;
+}
+
+/* --- Context menu --- */
+.qc-context-menu {
+  position: fixed;
+  z-index: 2000;
+  background: var(--vscode-menu-bg, var(--vscode-sidebar-bg));
+  border: 1px solid var(--vscode-menu-border, var(--vscode-border));
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 160px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  font-size: 12px;
+}
+
+.qc-context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.qc-context-item:hover {
+  background: var(--vscode-list-active, var(--vscode-list-hover));
+}
+
+.qc-context-item.danger {
+  color: var(--vscode-errorForeground, #f44);
+}
+
+.qc-context-separator {
+  height: 1px;
+  background: var(--vscode-menu-border, var(--vscode-border));
+  margin: 4px 0;
+}
+
+/* --- Editor modal extras --- */
+.qc-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.qc-radio-label,
+.qc-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* --- Macro step editor --- */
+.qc-step-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.qc-step {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.qc-step-drag {
+  cursor: grab;
+  opacity: 0.4;
+  font-size: 14px;
+  padding: 0 2px;
+  user-select: none;
+}
+
+.qc-step-drag:hover {
+  opacity: 0.8;
+}
+
+.qc-step-cmd {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  font-size: 12px;
+}
+
+.qc-step-delay {
+  width: 64px;
+  height: 24px;
+  font-size: 12px;
+  text-align: right;
+}
+
+.qc-step-delay-unit {
+  font-size: 10px;
+  opacity: 0.6;
+}
+
+.qc-macro-summary {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-top: 6px;
+}
+
+/* --- Sidebar header actions (for + and ... buttons) --- */
+.sidebar-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 2px;
+}
+
+.sidebar-header-actions .vscode-btn.icon-only {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0;
+}
+
+.sidebar-header-actions .vscode-btn.icon-only .codicon {
+  font-size: 14px;
+}

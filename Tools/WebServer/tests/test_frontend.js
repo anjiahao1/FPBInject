@@ -174,6 +174,7 @@ const modules = [
   'features/elfwatcher.js',
   'features/filebrowser.js',
   'features/transfer.js',
+  'features/quick-commands.js',
 ];
 
 console.log('Loading application modules...');
@@ -206,6 +207,7 @@ require('./js/test_log_file')(w);
 require('./js/test_features')(w);
 require('./js/test_elfwatcher')(w);
 require('./js/test_transfer')(w);
+require('./js/test_quick_commands')(w);
 
 // Wait for all async tests to complete then report results
 (async () => {
