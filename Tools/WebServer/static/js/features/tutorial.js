@@ -255,7 +255,10 @@ function renderTutorialStep() {
   // Render body
   const renderer = stepRenderers[step.id];
   if (renderer) {
+    body.style.animation = 'none';
     body.innerHTML = renderer();
+    void body.offsetHeight;
+    body.style.animation = '';
   }
 
   // Activate sidebar and highlight
