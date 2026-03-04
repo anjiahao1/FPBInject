@@ -92,13 +92,20 @@ module.exports = function (w) {
       assertFalse(result);
     });
 
-    it('returns false when localStorage already set', () => {
+    it('returns true and clears stale localStorage when first_launch=true', () => {
       browserGlobals.window.localStorage.setItem(
         'fpbinject_tutorial_completed',
         'true',
       );
       const result = w.shouldShowTutorial({ first_launch: true });
-      assertFalse(result);
+      assertTrue(result);
+      // localStorage should have been cleared
+      assertEqual(
+        browserGlobals.window.localStorage.getItem(
+          'fpbinject_tutorial_completed',
+        ),
+        null,
+      );
       clearTutorialStorage();
     });
 
@@ -148,13 +155,14 @@ module.exports = function (w) {
       clearTutorialStorage();
     });
 
-    it('shouldShowTutorial returns false after finishTutorial', () => {
+    it('shouldShowTutorial returns false after finishTutorial with first_launch=false', () => {
       resetMocks();
       clearTutorialStorage();
       setupTutorialDOM();
       w.startTutorial();
       w.finishTutorial();
-      assertFalse(w.shouldShowTutorial({ first_launch: true }));
+      // Normal case: after finishing, server sets first_launch=false
+      assertFalse(w.shouldShowTutorial({ first_launch: false }));
       clearTutorialStorage();
     });
   });
@@ -444,6 +452,98 @@ module.exports = function (w) {
       w.tutorialNext(); // step 2
       w.startTutorial(); // reset to step 0
       assertEqual(getActiveDotIndex(), 0);
+    });
+  });
+
+  /* ===========================
+     REGRESSION TESTS
+     =========================== */
+
+  describe('Tutorial - Regression: config.json deleted re-triggers tutorial', () => {
+    it('shouldShowTutorial returns true even with stale localStorage', () => {
+      browserGlobals.window.localStorage.setItem(
+        'fpbinject_tutorial_completed',
+        'true',
+      );
+      assertTrue(w.shouldShowTutorial({ first_launch: true }));
+      clearTutorialStorage();
+    });
+
+    it('shouldShowTutorial clears localStorage on first_launch=true', () => {
+      browserGlobals.window.localStorage.setItem(
+        'fpbinject_tutorial_completed',
+        'true',
+      );
+      w.shouldShowTutorial({ first_launch: true });
+      assertEqual(
+        browserGlobals.window.localStorage.getItem(
+          'fpbinject_tutorial_completed',
+        ),
+        null,
+      );
+      clearTutorialStorage();
+    });
+
+    it('shouldShowTutorial does not clear localStorage when first_launch=false', () => {
+      browserGlobals.window.localStorage.setItem(
+        'fpbinject_tutorial_completed',
+        'true',
+      );
+      w.shouldShowTutorial({ first_launch: false });
+      assertEqual(
+        browserGlobals.window.localStorage.getItem(
+          'fpbinject_tutorial_completed',
+        ),
+        'true',
+      );
+      clearTutorialStorage();
+    });
+  });
+
+  describe('Tutorial - Regression: last step shows Finish not Next', () => {
+    it('nextBtn text is not "Next" on last step', () => {
+      resetMocks();
+      clearTutorialStorage();
+      setupTutorialDOM();
+      w.startTutorial();
+      w.tutorialGoTo(8); // complete (last step)
+      const nextBtn = getElement('tutorialNextBtn');
+      assertTrue(nextBtn.textContent !== 'Next');
+    });
+
+    it('nextBtn text is "Next" on non-last step', () => {
+      resetMocks();
+      clearTutorialStorage();
+      setupTutorialDOM();
+      w.startTutorial(); // step 0
+      const nextBtn = getElement('tutorialNextBtn');
+      assertEqual(nextBtn.textContent, 'Next');
+    });
+  });
+
+  describe('Tutorial - Regression: appearance step saves config', () => {
+    it('appearance language select onchange calls saveConfig', () => {
+      resetMocks();
+      clearTutorialStorage();
+      setupTutorialDOM();
+      w.startTutorial();
+      w.tutorialGoTo(1); // appearance step
+      const body = getElement('tutorialBody');
+      assertTrue(body.innerHTML.includes('saveConfig'));
+    });
+
+    it('appearance theme select onchange calls saveConfig', () => {
+      resetMocks();
+      clearTutorialStorage();
+      setupTutorialDOM();
+      w.startTutorial();
+      w.tutorialGoTo(1); // appearance step
+      const body = getElement('tutorialBody');
+      const themeSelectMatch = body.innerHTML.match(
+        /tutorialThemeSelect[\s\S]*?onchange="([^"]*)"/,
+      );
+      assertTrue(themeSelectMatch !== null);
+      assertTrue(themeSelectMatch[1].includes('saveConfig'));
     });
   });
 };

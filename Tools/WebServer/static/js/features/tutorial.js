@@ -196,11 +196,10 @@ function stopGatePoll() {
    =========================== */
 
 function shouldShowTutorial(configData) {
-  return (
-    configData &&
-    configData.first_launch === true &&
-    !localStorage.getItem(TUTORIAL_STORAGE_KEY)
-  );
+  if (!configData || configData.first_launch !== true) return false;
+  // first_launch means config.json was recreated — clear stale localStorage
+  localStorage.removeItem(TUTORIAL_STORAGE_KEY);
+  return true;
 }
 
 function startTutorial() {
@@ -478,7 +477,7 @@ const stepRenderers = {
       <div class="tutorial-config-group">
         <div class="tutorial-config-item">
           <label><i class="codicon codicon-globe"></i> ${t('tutorial.appearance_language', 'Language')}</label>
-          <select id="tutorialLangSelect" class="vscode-select" onchange="if(typeof changeLanguage==='function'){changeLanguage(this.value).then(function(){renderTutorialStep()})}">
+          <select id="tutorialLangSelect" class="vscode-select" onchange="var v=this.value;var el=document.getElementById('uiLanguage');if(el)el.value=v;if(typeof changeLanguage==='function'){changeLanguage(v).then(function(){renderTutorialStep();if(typeof saveConfig==='function')saveConfig(true)})}">
             <option value="en" ${currentLang === 'en' ? 'selected' : ''}>English</option>
             <option value="zh-CN" ${currentLang === 'zh-CN' ? 'selected' : ''}>简体中文</option>
             <option value="zh-TW" ${currentLang === 'zh-TW' ? 'selected' : ''}>繁體中文</option>
@@ -486,7 +485,7 @@ const stepRenderers = {
         </div>
         <div class="tutorial-config-item">
           <label><i class="codicon codicon-color-mode"></i> ${t('tutorial.appearance_theme', 'Theme')}</label>
-          <select id="tutorialThemeSelect" class="vscode-select" onchange="if(typeof setTheme==='function') setTheme(this.value)">
+          <select id="tutorialThemeSelect" class="vscode-select" onchange="var v=this.value;var el=document.getElementById('uiTheme');if(el)el.value=v;if(typeof setTheme==='function'){setTheme(v);if(typeof saveConfig==='function')saveConfig(true)}">
             <option value="dark" ${currentTheme === 'dark' ? 'selected' : ''}>${t('config.options.dark', 'Dark')}</option>
             <option value="light" ${currentTheme === 'light' ? 'selected' : ''}>${t('config.options.light', 'Light')}</option>
           </select>
