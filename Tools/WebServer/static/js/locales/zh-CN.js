@@ -343,10 +343,9 @@ window.i18nResources['zh-CN'] = {
       ui_theme: '界面颜色主题',
       ui_language: '界面显示语言',
     },
-  },
 
-  // 教学引导
-  tutorial: {
+    // 教学引导
+    tutorial: {
     next: '下一步',
     prev: '上一步',
     skip: '跳过',
@@ -388,5 +387,6 @@ window.i18nResources['zh-CN'] = {
     complete_configured: '已配置',
     complete_skipped: '未配置',
     complete_hint: '点击标题栏的 🎓 按钮可随时重新进入教学。',
+    },
   },
 };

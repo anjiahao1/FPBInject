@@ -358,10 +358,9 @@ window.i18nResources['en'] = {
       ui_theme: 'UI color theme',
       ui_language: 'UI display language',
     },
-  },
 
-  // Tutorial
-  tutorial: {
+    // Tutorial
+    tutorial: {
     next: 'Next',
     prev: 'Previous',
     skip: 'Skip',
@@ -409,5 +408,6 @@ window.i18nResources['en'] = {
     complete_skipped: 'Skipped',
     complete_hint:
       'Click the \ud83c\udf93 button in the title bar to restart this tutorial anytime.',
+    },
   },
 };

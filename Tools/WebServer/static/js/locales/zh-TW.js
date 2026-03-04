@@ -343,10 +343,9 @@ window.i18nResources['zh-TW'] = {
       ui_theme: '介面顏色主題',
       ui_language: '介面顯示語言',
     },
-  },
 
-  // 教學引導
-  tutorial: {
+    // 教學引導
+    tutorial: {
     next: '下一步',
     prev: '上一步',
     skip: '跳過',
@@ -388,5 +387,6 @@ window.i18nResources['zh-TW'] = {
     complete_configured: '已設定',
     complete_skipped: '未設定',
     complete_hint: '點擊標題列的 🎓 按鈕可隨時重新進入教學。',
+    },
   },
 };
