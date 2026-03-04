@@ -44,7 +44,29 @@ const TUTORIAL_STEPS = [
     gateOk: 'tutorial.gate_transfer_ok',
   },
   { id: 'symbols', sidebar: 'details-symbols' },
-  { id: 'config', sidebar: 'details-configuration' },
+  {
+    id: 'config',
+    sidebar: 'details-configuration',
+    gate: () => {
+      const elfPath = document.getElementById('elfPath')?.value || '';
+      const compileDb =
+        document.getElementById('compileCommandsPath')?.value || '';
+      const toolchain = document.getElementById('toolchainPath')?.value || '';
+      const autoCompile =
+        document.getElementById('autoCompile')?.checked || false;
+      const watchDirs =
+        typeof getWatchDirs === 'function' ? getWatchDirs() : [];
+      return !!(
+        elfPath &&
+        compileDb &&
+        toolchain &&
+        autoCompile &&
+        watchDirs.length > 0
+      );
+    },
+    gateHint: 'tutorial.gate_config',
+    gateOk: 'tutorial.gate_config_ok',
+  },
   { id: 'complete', sidebar: null },
 ];
 
@@ -530,6 +552,7 @@ const stepRenderers = {
   },
 
   config() {
+    const step = TUTORIAL_STEPS.find((s) => s.id === 'config');
     return `
       <p>${t('tutorial.config_desc', 'The Configuration section contains all workbench settings.')}</p>
       <div class="tutorial-feature-list">
@@ -565,6 +588,7 @@ const stepRenderers = {
       <p class="tutorial-hint" style="margin-top: 12px; opacity: 0.7; font-size: 12px;">
         ${t('tutorial.config_hint', 'Expand each section to configure settings.')}
       </p>
+      ${renderGateStatus(step)}
     `;
   },
 

@@ -436,6 +436,9 @@ window.i18nResources['zh-CN'] = {
       gate_device_ok: '✅ 设备探测成功！',
       gate_transfer: '⏳ 请在传输区域点击「刷新」加载文件列表。',
       gate_transfer_ok: '✅ 文件列表加载成功！',
+      gate_config:
+        '⏳ 请填写 ELF 路径、编译数据库、工具链，添加监控目录，并启用自动注入。',
+      gate_config_ok: '✅ 所有配置项已设置！',
     },
   },
 };

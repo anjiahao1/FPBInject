@@ -474,6 +474,9 @@ window.i18nResources['en'] = {
       gate_transfer:
         '⏳ Please click "Refresh" in the Transfer section to load the file list.',
       gate_transfer_ok: '✅ File list loaded successfully!',
+      gate_config:
+        '⏳ Please fill in ELF path, compile database, toolchain, add watch directories, and enable auto-inject.',
+      gate_config_ok: '✅ All configuration fields are set!',
     },
   },
 };

@@ -437,6 +437,9 @@ window.i18nResources['zh-TW'] = {
       gate_device_ok: '✅ 裝置偵測成功！',
       gate_transfer: '⏳ 請在傳輸區域點擊「重新整理」載入檔案列表。',
       gate_transfer_ok: '✅ 檔案列表載入成功！',
+      gate_config:
+        '⏳ 請填寫 ELF 路徑、編譯資料庫、工具鏈，新增監控目錄，並啟用自動注入。',
+      gate_config_ok: '✅ 所有設定項已完成！',
     },
   },
 };
