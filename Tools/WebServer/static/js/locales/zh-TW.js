@@ -357,7 +357,7 @@ window.i18nResources['zh-TW'] = {
 
       welcome_title: '歡迎使用 FPBInject Workbench',
       welcome_desc:
-        '基於 ARM Cortex-M FPB 硬體單元的執行時期程式碼注入工具。本教學將帶你了解所有功能的位置。',
+        '基於 ARM Cortex-M FPB 硬體單元的執行時程式碼注入工具。<br><br>本教學將帶你了解所有功能的位置。',
 
       connection_title: '串列埠連線',
       connection_desc: '連線區域用於透過串列埠連線你的裝置。',

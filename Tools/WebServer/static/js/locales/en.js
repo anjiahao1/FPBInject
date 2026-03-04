@@ -372,7 +372,7 @@ window.i18nResources['en'] = {
 
       welcome_title: 'Welcome to FPBInject Workbench',
       welcome_desc:
-        'An ARM Cortex-M runtime code injection tool based on FPB hardware. This guide will show you where to find all the features.',
+        'An ARM Cortex-M runtime code injection tool based on FPB hardware.<br><br>This guide will show you where to find all the features.',
 
       connection_title: 'Serial Connection',
       connection_desc:
