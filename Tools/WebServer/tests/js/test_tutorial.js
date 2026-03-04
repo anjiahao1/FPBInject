@@ -277,14 +277,14 @@ module.exports = function (w) {
       assertTrue(body.innerHTML.includes('🔧'));
     });
 
-    it('connection step renders port select', () => {
+    it('connection step renders feature list', () => {
       resetMocks();
       clearTutorialStorage();
       setupTutorialDOM();
       w.startTutorial();
-      w.tutorialGoTo(2); // connection
+      w.tutorialGoTo(1); // connection
       const body = getElement('tutorialBody');
-      assertTrue(body.innerHTML.includes('tutorialPortSelect'));
+      assertTrue(body.innerHTML.includes('tutorial-feature-list'));
     });
 
     it('quickcmd step renders feature list', () => {
@@ -292,7 +292,7 @@ module.exports = function (w) {
       clearTutorialStorage();
       setupTutorialDOM();
       w.startTutorial();
-      w.tutorialGoTo(5); // quickcmd
+      w.tutorialGoTo(3); // quickcmd
       const body = getElement('tutorialBody');
       assertTrue(body.innerHTML.includes('tutorial-feature-list'));
     });
@@ -302,7 +302,7 @@ module.exports = function (w) {
       clearTutorialStorage();
       setupTutorialDOM();
       w.startTutorial();
-      w.tutorialGoTo(6); // complete
+      w.tutorialGoTo(7); // complete
       const body = getElement('tutorialBody');
       assertTrue(body.innerHTML.includes('tutorial-summary'));
     });
@@ -312,7 +312,7 @@ module.exports = function (w) {
       clearTutorialStorage();
       setupTutorialDOM();
       w.startTutorial();
-      w.tutorialGoTo(6); // complete
+      w.tutorialGoTo(7); // complete
       const body = getElement('tutorialBody');
       assertTrue(body.innerHTML.includes('🎉'));
     });
@@ -341,7 +341,7 @@ module.exports = function (w) {
       clearTutorialStorage();
       setupTutorialDOM();
       w.startTutorial();
-      w.tutorialGoTo(6); // last step
+      w.tutorialGoTo(7); // last step
       const skipBtn = getElement('tutorialSkipBtn');
       assertEqual(skipBtn.style.display, 'none');
     });
@@ -351,7 +351,7 @@ module.exports = function (w) {
       clearTutorialStorage();
       setupTutorialDOM();
       w.startTutorial();
-      w.tutorialGoTo(6); // last step
+      w.tutorialGoTo(7); // last step
       const skipAllBtn = getElement('tutorialSkipAllBtn');
       assertEqual(skipAllBtn.style.display, 'none');
     });
@@ -362,9 +362,9 @@ module.exports = function (w) {
       setupTutorialDOM();
       w.startTutorial();
       const progress = getElement('tutorialProgress');
-      // 7 steps = 7 dot buttons
+      // 8 steps = 8 dot buttons
       const dotCount = (progress.innerHTML.match(/tutorial-dot/g) || []).length;
-      assertEqual(dotCount, 7);
+      assertEqual(dotCount, 8);
     });
   });
 
@@ -378,12 +378,12 @@ module.exports = function (w) {
       clearTutorialStorage();
       setupTutorialDOM();
       w.startTutorial(); // step 0 = welcome
-      w.tutorialNext(); // marks welcome, moves to step 1 = ui
-      w.tutorialNext(); // marks ui as configured, moves to step 2
-      // Go to complete step to check summary - ui should be configured
-      w.tutorialGoTo(6);
+      w.tutorialNext(); // marks welcome, moves to step 1 = connection
+      w.tutorialNext(); // marks connection as configured, moves to step 2
+      // Go to complete step to check summary - connection should be configured
+      w.tutorialGoTo(7);
       const body = getElement('tutorialBody');
-      // ui was marked configured via tutorialNext (welcome is excluded from summary)
+      // connection was marked configured via tutorialNext (welcome is excluded from summary)
       assertTrue(body.innerHTML.includes('configured'));
     });
 
@@ -393,11 +393,12 @@ module.exports = function (w) {
       setupTutorialDOM();
       w.startTutorial(); // step 0
       w.tutorialSkip(); // skip welcome, move to step 1
-      w.tutorialSkip(); // skip ui
       w.tutorialSkip(); // skip connection
-      w.tutorialSkip(); // skip project
-      w.tutorialSkip(); // skip inject
-      w.tutorialSkip(); // skip quickcmd -> complete
+      w.tutorialSkip(); // skip device
+      w.tutorialSkip(); // skip quickcmd
+      w.tutorialSkip(); // skip transfer
+      w.tutorialSkip(); // skip symbols
+      w.tutorialSkip(); // skip config -> complete
       const body = getElement('tutorialBody');
       // All intermediate steps should show skipped
       assertTrue(body.innerHTML.includes('skipped'));
@@ -414,7 +415,7 @@ module.exports = function (w) {
       clearTutorialStorage();
       setupTutorialDOM();
       w.startTutorial();
-      w.tutorialGoTo(6); // last step
+      w.tutorialGoTo(7); // last step
       w.tutorialNext(); // should finish
       const overlay = getElement('tutorialOverlay');
       assertFalse(overlay.classList.contains('show'));
@@ -426,7 +427,7 @@ module.exports = function (w) {
       clearTutorialStorage();
       setupTutorialDOM();
       w.startTutorial();
-      w.tutorialGoTo(6); // last step
+      w.tutorialGoTo(7); // last step
       w.tutorialSkip(); // should finish
       const overlay = getElement('tutorialOverlay');
       assertFalse(overlay.classList.contains('show'));

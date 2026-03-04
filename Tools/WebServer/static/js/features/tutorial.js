@@ -5,18 +5,89 @@
 const TUTORIAL_STORAGE_KEY = 'fpbinject_tutorial_completed';
 
 const TUTORIAL_STEPS = [
-  { id: 'welcome', configGroup: null },
-  { id: 'ui', configGroup: 'UI' },
-  { id: 'connection', configGroup: 'CONNECTION' },
-  { id: 'project', configGroup: 'PROJECT' },
-  { id: 'inject', configGroup: 'INJECT' },
-  { id: 'quickcmd', configGroup: null },
-  { id: 'complete', configGroup: null },
+  { id: 'welcome', sidebar: null },
+  { id: 'connection', sidebar: 'details-connection' },
+  { id: 'device', sidebar: 'details-device' },
+  { id: 'quickcmd', sidebar: 'details-quick-commands' },
+  { id: 'transfer', sidebar: 'details-transfer' },
+  { id: 'symbols', sidebar: 'details-symbols' },
+  { id: 'config', sidebar: 'details-configuration' },
+  { id: 'complete', sidebar: null },
 ];
 
 let tutorialStep = 0;
 let tutorialActive = false;
 let tutorialStepConfigured = {}; // Track which steps user configured
+let currentHighlightedElement = null;
+
+/* ===========================
+   UI HIGHLIGHTING
+   =========================== */
+
+function highlightElement(selector) {
+  clearHighlight();
+
+  const element = document.querySelector(selector);
+  if (!element) return;
+
+  // Create backdrop
+  const backdrop = document.createElement('div');
+  backdrop.className = 'tutorial-highlight-backdrop';
+  backdrop.id = 'tutorialHighlightBackdrop';
+  document.body.appendChild(backdrop);
+
+  // Highlight target
+  element.classList.add(
+    'tutorial-highlight-target',
+    'tutorial-highlight-pulse',
+  );
+  currentHighlightedElement = element;
+
+  // Scroll into view
+  setTimeout(() => {
+    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 100);
+}
+
+function clearHighlight() {
+  const backdrop = document.getElementById('tutorialHighlightBackdrop');
+  if (backdrop) backdrop.remove();
+
+  if (currentHighlightedElement) {
+    currentHighlightedElement.classList.remove(
+      'tutorial-highlight-target',
+      'tutorial-highlight-pulse',
+    );
+    currentHighlightedElement = null;
+  }
+}
+
+function activateSidebarForStep(sidebarId) {
+  if (!sidebarId) return;
+
+  // Find which activity bar button corresponds to this sidebar section
+  const sectionMap = {
+    'details-connection': 'connection',
+    'details-device': 'device',
+    'details-quick-commands': 'quick-commands',
+    'details-transfer': 'transfer',
+    'details-symbols': 'symbols',
+    'details-configuration': 'configuration',
+  };
+
+  const sectionName = sectionMap[sidebarId];
+  if (sectionName && typeof activateSection === 'function') {
+    activateSection(sectionName);
+  }
+
+  // Open the details element
+  setTimeout(() => {
+    const details = document.getElementById(sidebarId);
+    if (details && details.tagName === 'DETAILS') {
+      details.open = true;
+    }
+  }, 200);
+}
 
 /* ===========================
    LIFECYCLE
@@ -71,6 +142,7 @@ function tutorialSkipAll() {
 
 function finishTutorial() {
   tutorialActive = false;
+  clearHighlight();
   localStorage.setItem(TUTORIAL_STORAGE_KEY, 'true');
   const overlay = document.getElementById('tutorialOverlay');
   if (overlay) overlay.classList.remove('show');
@@ -102,6 +174,9 @@ function renderTutorialStep() {
 
   if (!body || !step) return;
 
+  // Clear previous highlights
+  clearHighlight();
+
   // Title
   const titleKey = `tutorial.${step.id}_title`;
   if (title) title.textContent = t(titleKey, step.id);
@@ -118,6 +193,14 @@ function renderTutorialStep() {
   const renderer = stepRenderers[step.id];
   if (renderer) {
     body.innerHTML = renderer();
+  }
+
+  // Activate sidebar and highlight
+  if (step.sidebar) {
+    activateSidebarForStep(step.sidebar);
+    setTimeout(() => {
+      highlightElement(`#${step.sidebar}`);
+    }, 300);
   }
 
   // Progress dots
@@ -175,49 +258,64 @@ const stepRenderers = {
     `;
   },
 
-  ui() {
-    return `
-      <p>${t('tutorial.ui_desc', 'Choose your preferred language and theme.')}</p>
-      <div class="tutorial-config-group" id="tutorialUiConfig"></div>
-    `;
-  },
-
   connection() {
     return `
-      <p>${t('tutorial.connection_desc', 'Select the serial port and baud rate.')}</p>
-      <div class="tutorial-port-row">
-        <select id="tutorialPortSelect" class="vscode-select"></select>
-        <button class="vscode-btn secondary" onclick="tutorialRefreshPorts()">
-          ${t('tutorial.connection_refresh', 'Refresh')}
-        </button>
+      <p>${t('tutorial.connection_desc', 'The Connection section lets you connect to your device via serial port.')}</p>
+      <div class="tutorial-feature-list">
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-plug"></i>
+          <div>
+            <strong>${t('tutorial.connection_port', 'Serial Port')}</strong>
+            ${t('tutorial.connection_port_desc', 'Select your device port from the dropdown. Click refresh to scan for new ports.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-dashboard"></i>
+          <div>
+            <strong>${t('tutorial.connection_baudrate', 'Baud Rate')}</strong>
+            ${t('tutorial.connection_baudrate_desc', 'Set the communication speed (default: 115200).')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-debug-start"></i>
+          <div>
+            <strong>${t('tutorial.connection_connect', 'Connect Button')}</strong>
+            ${t('tutorial.connection_connect_desc', 'Click to establish connection with your device.')}
+          </div>
+        </div>
       </div>
-      <div class="tutorial-config-item">
-        <label>${t('config.labels.baudrate', 'Baud Rate')}</label>
-        <input type="number" id="tutorialBaudrate" class="vscode-input" value="115200" />
-      </div>
-      <div style="margin-top: 10px">
-        <button class="vscode-btn" onclick="tutorialTestConnect()">
-          ${t('tutorial.connection_test', 'Test Connection')}
-        </button>
-      </div>
-      <div id="tutorialConnectStatus" class="tutorial-connect-status"></div>
-      <p class="tutorial-hint" style="margin-top: 10px; opacity: 0.6; font-size: 11px;">
-        ${t('tutorial.connection_skip_hint', 'No device? Skip this step.')}
+      <p class="tutorial-hint" style="margin-top: 12px; opacity: 0.7; font-size: 12px;">
+        ${t('tutorial.connection_hint', 'Look at the highlighted section on the left sidebar.')}
       </p>
     `;
   },
 
-  project() {
+  device() {
     return `
-      <p>${t('tutorial.project_desc', 'Set the ELF firmware file and compile database paths.')}</p>
-      <div class="tutorial-config-group" id="tutorialProjectConfig"></div>
-    `;
-  },
-
-  inject() {
-    return `
-      <p>${t('tutorial.inject_desc', 'Configure the patch injection mode and file watch directories.')}</p>
-      <div class="tutorial-config-group" id="tutorialInjectConfig"></div>
+      <p>${t('tutorial.device_desc', 'The Device section shows information about your connected device.')}</p>
+      <div class="tutorial-feature-list">
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-info"></i>
+          <div>
+            <strong>${t('tutorial.device_info', 'Device Info')}</strong>
+            ${t('tutorial.device_info_desc', 'View device status, FPB hardware capabilities, and active patches.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-pulse"></i>
+          <div>
+            <strong>${t('tutorial.device_ping', 'Ping Device')}</strong>
+            ${t('tutorial.device_ping_desc', 'Test device responsiveness and check connection health.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-layers"></i>
+          <div>
+            <strong>${t('tutorial.device_slots', 'FPB Slots')}</strong>
+            ${t('tutorial.device_slots_desc', 'See available and used FPB comparator slots for patching.')}
+          </div>
+        </div>
+      </div>
     `;
   },
 
@@ -229,17 +327,121 @@ const stepRenderers = {
           <i class="codicon codicon-terminal"></i>
           <div>
             <strong>${t('tutorial.quickcmd_feature_single', 'Single Command')}</strong>
-            ${t('tutorial.quickcmd_feature_single_desc', 'Send a serial command instantly.')}
+            ${t('tutorial.quickcmd_feature_single_desc', 'Send a serial command instantly to your device.')}
           </div>
         </div>
         <div class="tutorial-feature-item">
           <i class="codicon codicon-list-ordered"></i>
           <div>
             <strong>${t('tutorial.quickcmd_feature_macro', 'Macro')}</strong>
-            ${t('tutorial.quickcmd_feature_macro_desc', 'Execute a sequence of commands with delays.')}
+            ${t('tutorial.quickcmd_feature_macro_desc', 'Execute a sequence of commands with configurable delays.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-add"></i>
+          <div>
+            <strong>${t('tutorial.quickcmd_add', 'Add Commands')}</strong>
+            ${t('tutorial.quickcmd_add_desc', 'Create custom commands and organize them for quick access.')}
           </div>
         </div>
       </div>
+    `;
+  },
+
+  transfer() {
+    return `
+      <p>${t('tutorial.transfer_desc', 'The Transfer section handles file operations with your device.')}</p>
+      <div class="tutorial-feature-list">
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-cloud-upload"></i>
+          <div>
+            <strong>${t('tutorial.transfer_upload', 'Upload Files')}</strong>
+            ${t('tutorial.transfer_upload_desc', 'Send files from your computer to the device filesystem.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-cloud-download"></i>
+          <div>
+            <strong>${t('tutorial.transfer_download', 'Download Files')}</strong>
+            ${t('tutorial.transfer_download_desc', 'Retrieve files from the device to your local system.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-folder"></i>
+          <div>
+            <strong>${t('tutorial.transfer_browse', 'Browse Filesystem')}</strong>
+            ${t('tutorial.transfer_browse_desc', 'Navigate device directories and manage files remotely.')}
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  symbols() {
+    return `
+      <p>${t('tutorial.symbols_desc', 'The Symbols section helps you analyze firmware functions.')}</p>
+      <div class="tutorial-feature-list">
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-search"></i>
+          <div>
+            <strong>${t('tutorial.symbols_search', 'Search Functions')}</strong>
+            ${t('tutorial.symbols_search_desc', 'Find functions in your ELF firmware by name pattern.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-code"></i>
+          <div>
+            <strong>${t('tutorial.symbols_disasm', 'Disassembly')}</strong>
+            ${t('tutorial.symbols_disasm_desc', 'View assembly instructions for selected functions.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-file-code"></i>
+          <div>
+            <strong>${t('tutorial.symbols_decompile', 'Decompile')}</strong>
+            ${t('tutorial.symbols_decompile_desc', 'Generate pseudo-C code using Ghidra for better understanding.')}
+          </div>
+        </div>
+      </div>
+    `;
+  },
+
+  config() {
+    return `
+      <p>${t('tutorial.config_desc', 'The Configuration section contains all workbench settings.')}</p>
+      <div class="tutorial-feature-list">
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-symbol-color"></i>
+          <div>
+            <strong>${t('tutorial.config_ui', 'UI Settings')}</strong>
+            ${t('tutorial.config_ui_desc', 'Language, theme, and interface preferences.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-file-binary"></i>
+          <div>
+            <strong>${t('tutorial.config_project', 'Project Paths')}</strong>
+            ${t('tutorial.config_project_desc', 'ELF firmware file and compile database locations.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-debug-alt"></i>
+          <div>
+            <strong>${t('tutorial.config_inject', 'Injection Settings')}</strong>
+            ${t('tutorial.config_inject_desc', 'Patch mode, file watch, and auto-injection options.')}
+          </div>
+        </div>
+        <div class="tutorial-feature-item">
+          <i class="codicon codicon-output"></i>
+          <div>
+            <strong>${t('tutorial.config_more', 'More Options')}</strong>
+            ${t('tutorial.config_more_desc', 'Serial, terminal, logging, and advanced settings.')}
+          </div>
+        </div>
+      </div>
+      <p class="tutorial-hint" style="margin-top: 12px; opacity: 0.7; font-size: 12px;">
+        ${t('tutorial.config_hint', 'Expand each section to configure settings.')}
+      </p>
     `;
   },
 
@@ -253,7 +455,7 @@ const stepRenderers = {
       const icon = configured ? 'codicon-check' : 'codicon-circle-outline';
       const cls = configured ? 'configured' : 'skipped';
       const label = configured
-        ? t('tutorial.complete_configured', 'Configured')
+        ? t('tutorial.complete_configured', 'Visited')
         : t('tutorial.complete_skipped', 'Skipped');
       const stepTitle = t(`tutorial.${s.id}_title`, s.id);
       summaryHtml += `
@@ -267,8 +469,8 @@ const stepRenderers = {
 
     return `
       <div class="tutorial-icon">🎉</div>
-      <div class="tutorial-welcome-title">${t('tutorial.complete_title', 'Setup Complete!')}</div>
-      <p class="tutorial-welcome-subtitle">${t('tutorial.complete_desc', 'You can modify these settings anytime.')}</p>
+      <div class="tutorial-welcome-title">${t('tutorial.complete_title', 'Tutorial Complete!')}</div>
+      <p class="tutorial-welcome-subtitle">${t('tutorial.complete_desc', 'You now know where to find all the features.')}</p>
       <div class="tutorial-summary">${summaryHtml}</div>
       <p class="tutorial-hint" style="margin-top: 16px; text-align: center; opacity: 0.6; font-size: 11px;">
         ${t('tutorial.complete_hint', 'Click the 🎓 button to restart this tutorial.')}
@@ -276,154 +478,6 @@ const stepRenderers = {
     `;
   },
 };
-
-/* ===========================
-   CONFIG GROUP RENDERING
-   =========================== */
-
-async function renderTutorialConfigGroup(containerId, groupId) {
-  const schema = await loadConfigSchema();
-  if (!schema) return;
-
-  const container = document.getElementById(containerId);
-  if (!container) return;
-
-  const items = schema.schema
-    .filter((item) => item.group === groupId && item.show_in_sidebar !== false)
-    .sort((a, b) => a.order - b.order);
-
-  let html = '';
-  for (const item of items) {
-    html += renderConfigItem(item);
-  }
-  container.innerHTML = html;
-
-  // Load current values
-  if (typeof loadConfigValuesFromData === 'function') {
-    try {
-      const res = await fetch('/api/config');
-      const data = await res.json();
-      loadConfigValuesFromData(data);
-    } catch (e) {
-      // Silent
-    }
-  }
-
-  setupDependencies(schema);
-}
-
-/* ===========================
-   CONNECTION HELPERS
-   =========================== */
-
-async function tutorialRefreshPorts() {
-  const select = document.getElementById('tutorialPortSelect');
-  if (!select) return;
-
-  try {
-    const res = await fetch('/api/ports');
-    const data = await res.json();
-    select.innerHTML = '';
-    if (data.ports && data.ports.length > 0) {
-      for (const p of data.ports) {
-        const opt = document.createElement('option');
-        opt.value = p;
-        opt.textContent = p;
-        select.appendChild(opt);
-      }
-    } else {
-      const opt = document.createElement('option');
-      opt.value = '';
-      opt.textContent = '—';
-      select.appendChild(opt);
-    }
-  } catch (e) {
-    // Silent
-  }
-}
-
-async function tutorialTestConnect() {
-  const statusEl = document.getElementById('tutorialConnectStatus');
-  const portSelect = document.getElementById('tutorialPortSelect');
-  const baudrateInput = document.getElementById('tutorialBaudrate');
-  if (!statusEl) return;
-
-  const port = portSelect ? portSelect.value : '';
-  const baudrate = baudrateInput ? parseInt(baudrateInput.value, 10) : 115200;
-
-  if (!port) {
-    statusEl.className = 'tutorial-connect-status error';
-    statusEl.textContent = t('tutorial.connection_fail', 'Connection failed.');
-    return;
-  }
-
-  statusEl.className = 'tutorial-connect-status';
-  statusEl.style.display = 'block';
-  statusEl.textContent = '...';
-
-  try {
-    const res = await fetch('/api/connect', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ port, baudrate }),
-    });
-    const data = await res.json();
-
-    if (data.success) {
-      statusEl.className = 'tutorial-connect-status success';
-      statusEl.textContent = t(
-        'tutorial.connection_success',
-        'Connected successfully!',
-      );
-
-      // Sync to main UI
-      const mainPort = document.getElementById('portSelect');
-      const mainBaud = document.getElementById('baudrate');
-      if (mainPort) mainPort.value = port;
-      if (mainBaud) mainBaud.value = baudrate;
-
-      if (typeof handleConnected === 'function') handleConnected(port);
-    } else {
-      statusEl.className = 'tutorial-connect-status error';
-      statusEl.textContent = t(
-        'tutorial.connection_fail',
-        'Connection failed.',
-      );
-    }
-  } catch (e) {
-    statusEl.className = 'tutorial-connect-status error';
-    statusEl.textContent = t('tutorial.connection_fail', 'Connection failed.');
-  }
-}
-
-/* ===========================
-   POST-RENDER HOOKS
-   =========================== */
-
-// Override renderTutorialStep to add post-render logic
-const _origRenderStep = renderTutorialStep;
-
-// We use MutationObserver-free approach: call post-render after innerHTML
-const origRender = renderTutorialStep;
-function renderTutorialStepWithHooks() {
-  origRender();
-  const step = TUTORIAL_STEPS[tutorialStep];
-  if (!step) return;
-
-  // Post-render async setup
-  if (step.id === 'ui') {
-    renderTutorialConfigGroup('tutorialUiConfig', 'UI');
-  } else if (step.id === 'project') {
-    renderTutorialConfigGroup('tutorialProjectConfig', 'PROJECT');
-  } else if (step.id === 'inject') {
-    renderTutorialConfigGroup('tutorialInjectConfig', 'INJECT');
-  } else if (step.id === 'connection') {
-    tutorialRefreshPorts();
-  }
-}
-
-// Replace the function
-renderTutorialStep = renderTutorialStepWithHooks;
 
 /* ===========================
    EXPORTS

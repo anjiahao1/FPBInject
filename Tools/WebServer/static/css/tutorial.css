@@ -15,6 +15,46 @@
   flex-direction: column;
 }
 
+/* --- UI Highlighting System --- */
+.tutorial-highlight-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1050;
+  pointer-events: none;
+}
+
+.tutorial-highlight-target {
+  position: relative;
+  z-index: 1060 !important;
+  box-shadow:
+    0 0 0 4px var(--vscode-focusBorder, #007acc),
+    0 0 20px 8px rgba(0, 122, 204, 0.3);
+  border-radius: 4px;
+  transition: box-shadow 0.3s ease;
+}
+
+.tutorial-highlight-pulse {
+  animation: tutorial-pulse 2s ease-in-out infinite;
+}
+
+@keyframes tutorial-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 4px var(--vscode-focusBorder, #007acc),
+      0 0 20px 8px rgba(0, 122, 204, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 0 0 4px var(--vscode-focusBorder, #007acc),
+      0 0 30px 12px rgba(0, 122, 204, 0.5);
+  }
+}
+
 /* --- Header --- */
 .tutorial-header {
   display: flex;
@@ -252,10 +292,11 @@
   color: var(--vscode-titlebar-fg, #ccc);
   cursor: pointer;
   opacity: 0.6;
-  font-size: 14px;
-  padding: 0 6px;
+  font-size: 12px;
+  padding: 0 8px;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   transition: opacity 0.15s;
 }
 

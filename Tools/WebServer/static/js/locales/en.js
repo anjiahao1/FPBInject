@@ -368,47 +368,94 @@ window.i18nResources['en'] = {
       finish: 'Get Started',
       step_of: '{{current}} / {{total}}',
       btn_title: 'Tutorial',
+      btn_label: 'Tutorial',
 
       welcome_title: 'Welcome to FPBInject Workbench',
       welcome_desc:
-        'An ARM Cortex-M runtime code injection tool based on FPB hardware. This guide will walk you through the basic setup.',
-
-      ui_title: 'Interface Settings',
-      ui_desc: 'Choose your preferred language and theme.',
+        'An ARM Cortex-M runtime code injection tool based on FPB hardware. This guide will show you where to find all the features.',
 
       connection_title: 'Serial Connection',
       connection_desc:
-        'Select the serial port and baud rate for your device. You can change these later in the config panel.',
-      connection_refresh: 'Refresh Ports',
-      connection_test: 'Test Connection',
-      connection_success: 'Connected successfully!',
-      connection_fail: 'Connection failed. You can skip and configure later.',
-      connection_skip_hint: 'No device? Skip this step.',
+        'The Connection section lets you connect to your device via serial port.',
+      connection_port: 'Serial Port',
+      connection_port_desc:
+        'Select your device port from the dropdown. Click refresh to scan for new ports.',
+      connection_baudrate: 'Baud Rate',
+      connection_baudrate_desc:
+        'Set the communication speed (default: 115200).',
+      connection_connect: 'Connect Button',
+      connection_connect_desc:
+        'Click to establish connection with your device.',
+      connection_hint: 'Look at the highlighted section on the left sidebar.',
 
-      project_title: 'Project Configuration',
-      project_desc:
-        'Set the ELF firmware file and compile database paths for symbol resolution and patch compilation.',
-
-      inject_title: 'Injection Settings',
-      inject_desc:
-        'Configure the patch injection mode and file watch directories.',
+      device_title: 'Device Information',
+      device_desc:
+        'The Device section shows information about your connected device.',
+      device_info: 'Device Info',
+      device_info_desc:
+        'View device status, FPB hardware capabilities, and active patches.',
+      device_ping: 'Ping Device',
+      device_ping_desc:
+        'Test device responsiveness and check connection health.',
+      device_slots: 'FPB Slots',
+      device_slots_desc:
+        'See available and used FPB comparator slots for patching.',
 
       quickcmd_title: 'Quick Commands',
       quickcmd_desc:
-        'Quick commands let you send serial commands or execute command sequences (macros) with one click.',
+        'Quick commands let you send serial commands or execute macros.',
       quickcmd_feature_single: 'Single Command',
-      quickcmd_feature_single_desc: 'Send a serial command instantly.',
+      quickcmd_feature_single_desc:
+        'Send a serial command instantly to your device.',
       quickcmd_feature_macro: 'Macro',
       quickcmd_feature_macro_desc:
-        'Execute a sequence of commands with delays.',
+        'Execute a sequence of commands with configurable delays.',
+      quickcmd_add: 'Add Commands',
+      quickcmd_add_desc:
+        'Create custom commands and organize them for quick access.',
 
-      complete_title: 'Setup Complete!',
-      complete_desc:
-        'You can modify these settings anytime in the sidebar config panel.',
-      complete_configured: 'Configured',
+      transfer_title: 'File Transfer',
+      transfer_desc:
+        'The Transfer section handles file operations with your device.',
+      transfer_upload: 'Upload Files',
+      transfer_upload_desc:
+        'Send files from your computer to the device filesystem.',
+      transfer_download: 'Download Files',
+      transfer_download_desc:
+        'Retrieve files from the device to your local system.',
+      transfer_browse: 'Browse Filesystem',
+      transfer_browse_desc:
+        'Navigate device directories and manage files remotely.',
+
+      symbols_title: 'Symbol Analysis',
+      symbols_desc: 'The Symbols section helps you analyze firmware functions.',
+      symbols_search: 'Search Functions',
+      symbols_search_desc:
+        'Find functions in your ELF firmware by name pattern.',
+      symbols_disasm: 'Disassembly',
+      symbols_disasm_desc: 'View assembly instructions for selected functions.',
+      symbols_decompile: 'Decompile',
+      symbols_decompile_desc:
+        'Generate pseudo-C code using Ghidra for better understanding.',
+
+      config_title: 'Configuration',
+      config_desc: 'The Configuration section contains all workbench settings.',
+      config_ui: 'UI Settings',
+      config_ui_desc: 'Language, theme, and interface preferences.',
+      config_project: 'Project Paths',
+      config_project_desc: 'ELF firmware file and compile database locations.',
+      config_inject: 'Injection Settings',
+      config_inject_desc: 'Patch mode, file watch, and auto-injection options.',
+      config_more: 'More Options',
+      config_more_desc: 'Serial, terminal, logging, and advanced settings.',
+      config_hint: 'Expand each section to configure settings.',
+
+      complete_title: 'Tutorial Complete!',
+      complete_desc: 'You now know where to find all the features.',
+      complete_configured: 'Visited',
       complete_skipped: 'Skipped',
       complete_hint:
-        'Click the \ud83c\udf93 button in the title bar to restart this tutorial anytime.',
+        'Click the 🎓 button in the title bar to restart this tutorial anytime.',
     },
   },
 };
