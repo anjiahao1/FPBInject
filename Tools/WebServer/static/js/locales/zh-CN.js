@@ -439,6 +439,11 @@ window.i18nResources['zh-CN'] = {
       gate_config:
         '⏳ 请填写 ELF 路径、编译数据库、工具链，添加监控目录，并启用自动注入。',
       gate_config_ok: '✅ 所有配置项已设置！',
+      gate_config_elf: 'ELF 路径',
+      gate_config_compiledb: '编译数据库',
+      gate_config_toolchain: '工具链',
+      gate_config_watchdirs: '监控目录',
+      gate_config_autoinject: '自动注入',
     },
   },
 };

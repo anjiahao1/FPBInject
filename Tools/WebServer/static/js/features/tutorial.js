@@ -117,6 +117,8 @@ function clearHighlight() {
     );
     currentHighlightedElement = null;
   }
+
+  clearConfigGateHighlights();
 }
 
 function activateSidebarForStep(sidebarId) {
@@ -162,6 +164,19 @@ function startGatePoll() {
     }
     const step = TUTORIAL_STEPS[tutorialStep];
     const { gated, passed } = getStepGateStatus(step);
+
+    // Update per-field highlights and checklist for config gate
+    if (step.id === 'config') {
+      highlightConfigGateFields();
+      const checklistEl = document.querySelector('.tutorial-gate-checklist');
+      if (checklistEl) {
+        const tmp = document.createElement('div');
+        tmp.innerHTML = renderConfigGateChecklist();
+        const newChecklist = tmp.firstElementChild;
+        if (newChecklist) checklistEl.replaceWith(newChecklist);
+      }
+    }
+
     if (gated && passed) {
       stopGatePoll();
       renderTutorialStep();
@@ -288,6 +303,10 @@ function renderTutorialStep() {
     activateSidebarForStep(step.sidebar);
     setTimeout(() => {
       highlightElement(`#${step.sidebar}`);
+      // Apply per-field visual guides for config gate
+      if (step.id === 'config') {
+        setTimeout(() => highlightConfigGateFields(), 100);
+      }
     }, 300);
   }
 
@@ -325,6 +344,82 @@ function renderTutorialStep() {
   }
 
   if (typeof translatePage === 'function') translatePage();
+}
+
+function renderConfigGateChecklist() {
+  const elfPath = document.getElementById('elfPath')?.value || '';
+  const compileDb = document.getElementById('compileCommandsPath')?.value || '';
+  const toolchain = document.getElementById('toolchainPath')?.value || '';
+  const autoCompile = document.getElementById('autoCompile')?.checked || false;
+  const watchDirs = typeof getWatchDirs === 'function' ? getWatchDirs() : [];
+
+  const items = [
+    { done: !!elfPath, label: t('tutorial.gate_config_elf', 'ELF Path') },
+    {
+      done: !!compileDb,
+      label: t('tutorial.gate_config_compiledb', 'Compile Database'),
+    },
+    {
+      done: !!toolchain,
+      label: t('tutorial.gate_config_toolchain', 'Toolchain'),
+    },
+    {
+      done: watchDirs.length > 0,
+      label: t('tutorial.gate_config_watchdirs', 'Watch Directories'),
+    },
+    {
+      done: autoCompile,
+      label: t('tutorial.gate_config_autoinject', 'Auto-Inject'),
+    },
+  ];
+
+  const rows = items
+    .map((item) => {
+      const icon = item.done
+        ? 'codicon-pass-filled'
+        : 'codicon-circle-large-outline';
+      const cls = item.done ? 'done' : '';
+      return `<div class="tutorial-gate-check-item ${cls}"><i class="codicon ${icon}"></i><span>${item.label}</span></div>`;
+    })
+    .join('');
+
+  return `<div class="tutorial-gate-checklist">${rows}</div>`;
+}
+
+/* --- Config gate per-field visual guides --- */
+
+const CONFIG_GATE_FIELDS = [
+  { id: 'elfPath', check: (el) => !!el.value },
+  { id: 'compileCommandsPath', check: (el) => !!el.value },
+  { id: 'toolchainPath', check: (el) => !!el.value },
+  { id: 'autoCompile', check: (el) => !!el.checked },
+  {
+    id: 'watchDirsSection',
+    check: () => {
+      const dirs = typeof getWatchDirs === 'function' ? getWatchDirs() : [];
+      return dirs.length > 0;
+    },
+  },
+];
+
+function highlightConfigGateFields() {
+  for (const field of CONFIG_GATE_FIELDS) {
+    const el = document.getElementById(field.id);
+    if (!el) continue;
+    const target = el.closest('.config-item') || el;
+    if (field.check(el)) {
+      target.classList.remove('tutorial-field-guide');
+    } else {
+      target.classList.add('tutorial-field-guide');
+      target.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+}
+
+function clearConfigGateHighlights() {
+  document.querySelectorAll('.tutorial-field-guide').forEach((el) => {
+    el.classList.remove('tutorial-field-guide');
+  });
 }
 
 function renderGateStatus(step) {
@@ -555,36 +650,7 @@ const stepRenderers = {
     const step = TUTORIAL_STEPS.find((s) => s.id === 'config');
     return `
       <p>${t('tutorial.config_desc', 'The Configuration section contains all workbench settings.')}</p>
-      <div class="tutorial-feature-list">
-        <div class="tutorial-feature-item">
-          <i class="codicon codicon-symbol-color"></i>
-          <div>
-            <strong>${t('tutorial.config_ui', 'UI Settings')}</strong>
-            ${t('tutorial.config_ui_desc', 'Language, theme, and interface preferences.')}
-          </div>
-        </div>
-        <div class="tutorial-feature-item">
-          <i class="codicon codicon-file-binary"></i>
-          <div>
-            <strong>${t('tutorial.config_project', 'Project Paths')}</strong>
-            ${t('tutorial.config_project_desc', 'ELF firmware file and compile database locations.')}
-          </div>
-        </div>
-        <div class="tutorial-feature-item">
-          <i class="codicon codicon-debug-alt"></i>
-          <div>
-            <strong>${t('tutorial.config_inject', 'Injection Settings')}</strong>
-            ${t('tutorial.config_inject_desc', 'Patch mode, file watch, and auto-injection options.')}
-          </div>
-        </div>
-        <div class="tutorial-feature-item">
-          <i class="codicon codicon-output"></i>
-          <div>
-            <strong>${t('tutorial.config_more', 'More Options')}</strong>
-            ${t('tutorial.config_more_desc', 'Serial, terminal, logging, and advanced settings.')}
-          </div>
-        </div>
-      </div>
+      ${renderConfigGateChecklist()}
       <p class="tutorial-hint" style="margin-top: 12px; opacity: 0.7; font-size: 12px;">
         ${t('tutorial.config_hint', 'Expand each section to configure settings.')}
       </p>

@@ -477,6 +477,11 @@ window.i18nResources['en'] = {
       gate_config:
         '⏳ Please fill in ELF path, compile database, toolchain, add watch directories, and enable auto-inject.',
       gate_config_ok: '✅ All configuration fields are set!',
+      gate_config_elf: 'ELF Path',
+      gate_config_compiledb: 'Compile Database',
+      gate_config_toolchain: 'Toolchain',
+      gate_config_watchdirs: 'Watch Directories',
+      gate_config_autoinject: 'Auto-Inject',
     },
   },
 };

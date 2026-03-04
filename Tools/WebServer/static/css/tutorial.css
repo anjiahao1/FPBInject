@@ -294,6 +294,25 @@
   opacity: 1;
 }
 
+/* --- Per-field gate visual guide --- */
+.tutorial-field-guide {
+  outline: 2px solid var(--vscode-focusBorder, #007acc) !important;
+  outline-offset: 2px;
+  border-radius: 4px;
+  animation: tutorial-field-pulse 1.5s ease-in-out infinite;
+  position: relative;
+}
+
+@keyframes tutorial-field-pulse {
+  0%,
+  100% {
+    outline-color: var(--vscode-focusBorder, #007acc);
+  }
+  50% {
+    outline-color: rgba(0, 122, 204, 0.3);
+  }
+}
+
 /* --- Titlebar tutorial button --- */
 .tutorial-trigger {
   background: none;

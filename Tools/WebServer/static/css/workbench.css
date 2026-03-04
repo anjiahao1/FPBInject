@@ -1330,7 +1330,7 @@ input[type="checkbox"] {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 1200;
   visibility: hidden;
   opacity: 0;
   transition: all 0.2s;

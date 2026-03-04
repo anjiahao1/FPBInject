@@ -440,6 +440,11 @@ window.i18nResources['zh-TW'] = {
       gate_config:
         '⏳ 請填寫 ELF 路徑、編譯資料庫、工具鏈，新增監控目錄，並啟用自動注入。',
       gate_config_ok: '✅ 所有設定項已完成！',
+      gate_config_elf: 'ELF 路徑',
+      gate_config_compiledb: '編譯資料庫',
+      gate_config_toolchain: '工具鏈',
+      gate_config_watchdirs: '監控目錄',
+      gate_config_autoinject: '自動注入',
     },
   },
 };
