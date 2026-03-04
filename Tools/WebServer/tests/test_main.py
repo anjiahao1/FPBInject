@@ -395,8 +395,15 @@ class TestAutoOpenBrowser(unittest.TestCase):
     @patch("main.restore_state")
     @patch("main.check_port_available", return_value=True)
     @patch("main.parse_args")
+    @patch("logging.basicConfig")
     def test_startup_banner_logged(
-        self, mock_args, mock_check, mock_restore, mock_create, mock_timer_cls
+        self,
+        mock_basic,
+        mock_args,
+        mock_check,
+        mock_restore,
+        mock_create,
+        mock_timer_cls,
     ):
         """Startup banner should contain server URL"""
         mock_args.return_value = Mock(
@@ -420,8 +427,15 @@ class TestAutoOpenBrowser(unittest.TestCase):
     @patch("main.restore_state")
     @patch("main.check_port_available", return_value=True)
     @patch("main.parse_args")
+    @patch("logging.basicConfig")
     def test_startup_banner_with_custom_port(
-        self, mock_args, mock_check, mock_restore, mock_create, mock_timer_cls
+        self,
+        mock_basic,
+        mock_args,
+        mock_check,
+        mock_restore,
+        mock_create,
+        mock_timer_cls,
     ):
         """Startup banner should show custom port"""
         mock_args.return_value = Mock(
