@@ -270,7 +270,7 @@
 }
 
 .tutorial-dot.completed {
-  background: var(--vscode-testing-iconPassed, #4caf50);
+  background: var(--vscode-button-bg, #007acc);
 }
 
 /* Action buttons */
