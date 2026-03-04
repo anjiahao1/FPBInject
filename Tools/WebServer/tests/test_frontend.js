@@ -175,6 +175,7 @@ const modules = [
   'features/filebrowser.js',
   'features/transfer.js',
   'features/quick-commands.js',
+  'features/tutorial.js',
 ];
 
 console.log('Loading application modules...');

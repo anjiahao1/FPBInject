@@ -1,0 +1,264 @@
+/* ========================================
+   FPBInject Workbench - Tutorial System
+   ======================================== */
+
+/* --- Overlay --- */
+.tutorial-overlay {
+  z-index: 1100;
+}
+
+.tutorial-modal {
+  width: 560px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Header --- */
+.tutorial-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--vscode-border);
+}
+
+.tutorial-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tutorial-step-count {
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* --- Body --- */
+.tutorial-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 200px;
+}
+
+.tutorial-body p {
+  margin: 0 0 12px;
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+.tutorial-body .tutorial-icon {
+  font-size: 48px;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.tutorial-body .tutorial-welcome-title {
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.tutorial-body .tutorial-welcome-subtitle {
+  text-align: center;
+  opacity: 0.8;
+  margin-bottom: 20px;
+}
+
+/* Config items rendered inside tutorial */
+.tutorial-config-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tutorial-config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tutorial-config-item label {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tutorial-config-item .tutorial-hint {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-top: 2px;
+}
+
+/* Connection step */
+.tutorial-port-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.tutorial-port-row select,
+.tutorial-port-row input {
+  flex: 1;
+}
+
+.tutorial-connect-status {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  margin-top: 8px;
+  display: none;
+}
+
+.tutorial-connect-status.success {
+  display: block;
+  background: rgba(76, 175, 80, 0.15);
+  color: #4caf50;
+}
+
+.tutorial-connect-status.error {
+  display: block;
+  background: rgba(244, 67, 54, 0.15);
+  color: #f44336;
+}
+
+/* Quick commands demo */
+.tutorial-feature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tutorial-feature-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--vscode-input-bg);
+}
+
+.tutorial-feature-item i {
+  font-size: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  color: var(--vscode-button-bg);
+}
+
+.tutorial-feature-item div {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tutorial-feature-item strong {
+  display: block;
+  margin-bottom: 2px;
+}
+
+/* Complete step summary */
+.tutorial-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tutorial-summary-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 0;
+}
+
+.tutorial-summary-item .codicon {
+  font-size: 14px;
+}
+
+.tutorial-summary-item.configured .codicon {
+  color: #4caf50;
+}
+
+.tutorial-summary-item.skipped .codicon {
+  color: var(--vscode-input-border);
+}
+
+/* --- Footer --- */
+.tutorial-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--vscode-border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Progress dots */
+.tutorial-progress {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.tutorial-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vscode-input-border);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  padding: 0;
+}
+
+.tutorial-dot:hover {
+  transform: scale(1.3);
+}
+
+.tutorial-dot.active {
+  background: var(--vscode-button-bg);
+  transform: scale(1.3);
+}
+
+.tutorial-dot.completed {
+  background: var(--vscode-testing-iconPassed, #4caf50);
+}
+
+/* Action buttons */
+.tutorial-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tutorial-actions-right {
+  display: flex;
+  gap: 8px;
+}
+
+.tutorial-skip-all {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.tutorial-skip-all:hover {
+  opacity: 1;
+}
+
+/* --- Titlebar tutorial button --- */
+.tutorial-trigger {
+  background: none;
+  border: none;
+  color: var(--vscode-titlebar-fg, #ccc);
+  cursor: pointer;
+  opacity: 0.6;
+  font-size: 14px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  transition: opacity 0.15s;
+}
+
+.tutorial-trigger:hover {
+  opacity: 1;
+}

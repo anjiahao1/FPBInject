@@ -76,6 +76,11 @@ async function loadConfig() {
     }
 
     await checkConnectionStatus();
+
+    // Tutorial: auto-start on first launch
+    if (typeof shouldShowTutorial === 'function' && shouldShowTutorial(data)) {
+      startTutorial();
+    }
   } catch (e) {
     console.warn('Config load skipped:', e.message);
   }

@@ -189,7 +189,9 @@ def api_get_config():
     from core.config_schema import PERSISTENT_KEYS
 
     device = state.device
-    return jsonify({key: getattr(device, key) for key in PERSISTENT_KEYS})
+    config_data = {key: getattr(device, key) for key in PERSISTENT_KEYS}
+    config_data["first_launch"] = state.first_launch
+    return jsonify(config_data)
 
 
 @bp.route("/config/schema", methods=["GET"])

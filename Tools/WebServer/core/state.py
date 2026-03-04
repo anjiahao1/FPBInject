@@ -175,6 +175,7 @@ class AppState:
         self.patch_template = self._get_default_patch_template()
 
         # Load config from file
+        self.first_launch = False
         self.load_config()
 
     def _get_default_patch_template(self):
@@ -212,6 +213,7 @@ class AppState:
         logger = logging.getLogger(__name__)
         if not os.path.exists(CONFIG_FILE):
             logger.info(f"Config file not found: {CONFIG_FILE}, using defaults")
+            self.first_launch = True
             return
 
         try:

@@ -1,0 +1,27 @@
+<!-- Tutorial Overlay -->
+<div class="modal-overlay tutorial-overlay" id="tutorialOverlay">
+  <div class="modal tutorial-modal">
+    <div class="tutorial-header">
+      <span id="tutorialTitle" class="tutorial-title"></span>
+      <span id="tutorialStepCount" class="tutorial-step-count"></span>
+    </div>
+    <div id="tutorialBody" class="tutorial-body">
+      <!-- Dynamic step content rendered here -->
+    </div>
+    <div class="tutorial-footer">
+      <div id="tutorialProgress" class="tutorial-progress"></div>
+      <div class="tutorial-actions">
+        <button id="tutorialSkipAllBtn" class="vscode-btn secondary tutorial-skip-all"
+                onclick="tutorialSkipAll()" data-i18n="tutorial.skip_all">Skip All</button>
+        <div class="tutorial-actions-right">
+          <button id="tutorialPrevBtn" class="vscode-btn secondary"
+                  onclick="tutorialPrev()" data-i18n="tutorial.prev">Previous</button>
+          <button id="tutorialSkipBtn" class="vscode-btn secondary"
+                  onclick="tutorialSkip()" data-i18n="tutorial.skip">Skip</button>
+          <button id="tutorialNextBtn" class="vscode-btn"
+                  onclick="tutorialNext()" data-i18n="tutorial.next">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
