@@ -5,6 +5,12 @@
 /* --- Overlay --- */
 .tutorial-overlay {
   z-index: 1100;
+  background: transparent !important;
+  pointer-events: none;
+}
+
+.tutorial-overlay .tutorial-modal {
+  pointer-events: auto;
 }
 
 .tutorial-modal {
