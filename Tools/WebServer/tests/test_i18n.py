@@ -1451,5 +1451,187 @@ class TestHardcodedTextInPopups(unittest.TestCase):
                 )
 
 
+class TestDeepKeyConsistency(unittest.TestCase):
+    """Deep comparison of all translation keys across locale files."""
+
+    SUPPORTED_LANGUAGES = ["en", "zh-CN", "zh-TW"]
+
+    def _parse_all_keys(self, content):
+        """Parse JS locale file and return all leaf key paths."""
+        keys = set()
+
+        def extract(text, prefix=""):
+            pattern = r"(\w+)\s*:\s*(?:(\{)|['\"])"
+            for match in re.finditer(pattern, text):
+                key = match.group(1)
+                full_key = f"{prefix}.{key}" if prefix else key
+                if match.group(2):  # nested object
+                    start = match.end()
+                    depth = 1
+                    end = start
+                    while depth > 0 and end < len(text):
+                        if text[end] == "{":
+                            depth += 1
+                        elif text[end] == "}":
+                            depth -= 1
+                        end += 1
+                    extract(text[start : end - 1], full_key)
+                else:
+                    keys.add(full_key)
+
+        translation_match = re.search(
+            r"translation:\s*\{(.+)\}\s*\};", content, re.DOTALL
+        )
+        if translation_match:
+            extract(translation_match.group(1))
+        return keys
+
+    def test_all_locales_have_identical_keys(self):
+        """Every leaf key in en.js must exist in zh-CN.js and zh-TW.js, and vice versa."""
+        all_keys = {}
+        for lang in self.SUPPORTED_LANGUAGES:
+            filepath = os.path.join(LOCALES_DIR, f"{lang}.js")
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+            all_keys[lang] = self._parse_all_keys(content)
+
+        en_keys = all_keys["en"]
+        for lang in ["zh-CN", "zh-TW"]:
+            lang_keys = all_keys[lang]
+            missing_in_lang = en_keys - lang_keys
+            extra_in_lang = lang_keys - en_keys
+            self.assertEqual(
+                len(missing_in_lang),
+                0,
+                f"\n❌ {lang} is missing {len(missing_in_lang)} keys present in en:\n"
+                + "\n".join(f"   - {k}" for k in sorted(missing_in_lang)[:30]),
+            )
+            self.assertEqual(
+                len(extra_in_lang),
+                0,
+                f"\n❌ {lang} has {len(extra_in_lang)} extra keys not in en:\n"
+                + "\n".join(f"   - {k}" for k in sorted(extra_in_lang)[:30]),
+            )
+
+
+class TestUnreferencedTranslations(unittest.TestCase):
+    """Detect translation keys that are never referenced in HTML or JS."""
+
+    JS_DIRS = [
+        os.path.join(BASE_DIR, "static", "js", "core"),
+        os.path.join(BASE_DIR, "static", "js", "features"),
+        os.path.join(BASE_DIR, "static", "js", "ui"),
+        os.path.join(BASE_DIR, "static", "js"),
+    ]
+    HTML_DIR = os.path.join(TEMPLATES_DIR, "partials")
+
+    # Keys that are referenced dynamically (constructed at runtime)
+    # and cannot be detected by static analysis
+    DYNAMIC_KEY_PREFIXES = [
+        # config-schema.js builds: config.labels.<key>, config.groups.<key>,
+        # tooltips.<key>, config.options.<key>
+        "config.labels.",
+        "config.groups.",
+        "config.options.",
+        "tooltips.",
+        # connection.status.<key> used via t('connection.status.' + state)
+        "connection.status.",
+    ]
+
+    def _parse_all_keys(self, content):
+        """Parse JS locale file and return all leaf key paths."""
+        keys = set()
+
+        def extract(text, prefix=""):
+            pattern = r"(\w+)\s*:\s*(?:(\{)|['\"])"
+            for match in re.finditer(pattern, text):
+                key = match.group(1)
+                full_key = f"{prefix}.{key}" if prefix else key
+                if match.group(2):
+                    start = match.end()
+                    depth = 1
+                    end = start
+                    while depth > 0 and end < len(text):
+                        if text[end] == "{":
+                            depth += 1
+                        elif text[end] == "}":
+                            depth -= 1
+                        end += 1
+                    extract(text[start : end - 1], full_key)
+                else:
+                    keys.add(full_key)
+
+        translation_match = re.search(
+            r"translation:\s*\{(.+)\}\s*\};", content, re.DOTALL
+        )
+        if translation_match:
+            extract(translation_match.group(1))
+        return keys
+
+    def _collect_referenced_keys(self):
+        """Collect all i18n keys referenced in HTML and JS source files."""
+        refs = set()
+
+        # 1. HTML data-i18n attributes
+        for filename in os.listdir(self.HTML_DIR):
+            if not filename.endswith(".html"):
+                continue
+            filepath = os.path.join(self.HTML_DIR, filename)
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+            for match in re.findall(r'data-i18n=["\']([^"\']+)["\']', content):
+                for part in match.split(";"):
+                    attr_match = re.match(r"\[\w+\](.+)", part)
+                    refs.add(attr_match.group(1) if attr_match else part)
+
+        # 2. JS t('key') / t("key") calls
+        for js_dir in self.JS_DIRS:
+            if not os.path.isdir(js_dir):
+                continue
+            for filename in os.listdir(js_dir):
+                if not filename.endswith(".js"):
+                    continue
+                filepath = os.path.join(js_dir, filename)
+                with open(filepath, "r", encoding="utf-8") as f:
+                    content = f.read()
+                # Match t('key' or t("key"
+                for m in re.findall(r"""t\(\s*['"]([^'"]+)['"]""", content):
+                    refs.add(m)
+
+        return refs
+
+    def _is_dynamic(self, key):
+        """Check if key is covered by a known dynamic prefix."""
+        for prefix in self.DYNAMIC_KEY_PREFIXES:
+            if key.startswith(prefix):
+                return True
+        return False
+
+    def test_no_unreferenced_translations(self):
+        """All translation keys should be referenced in HTML or JS source."""
+        en_path = os.path.join(LOCALES_DIR, "en.js")
+        with open(en_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        all_keys = self._parse_all_keys(content)
+        referenced = self._collect_referenced_keys()
+
+        unreferenced = set()
+        for key in all_keys:
+            if key in referenced:
+                continue
+            if self._is_dynamic(key):
+                continue
+            unreferenced.add(key)
+
+        self.assertEqual(
+            len(unreferenced),
+            0,
+            f"\n❌ Found {len(unreferenced)} unreferenced translation keys:\n"
+            + "\n".join(f"   - {k}" for k in sorted(unreferenced)[:40])
+            + "\n\nIf these keys are referenced dynamically, add their prefix to "
+            "DYNAMIC_KEY_PREFIXES in TestUnreferencedTranslations.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
