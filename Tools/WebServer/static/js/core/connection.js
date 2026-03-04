@@ -117,6 +117,10 @@ async function toggleConnect() {
   if (!state.isConnected) {
     const port = document.getElementById('portSelect').value;
     const baud = document.getElementById('baudrate').value;
+    const dataBits = document.getElementById('dataBits')?.value || '8';
+    const parity = document.getElementById('parity')?.value || 'none';
+    const stopBits = document.getElementById('stopBits')?.value || '1';
+    const flowControl = document.getElementById('flowControl')?.value || 'none';
     const maxRetries = getConnectionMaxRetries();
 
     // Check if port is selected
@@ -142,7 +146,14 @@ async function toggleConnect() {
         const res = await fetch('/api/connect', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ port, baudrate: parseInt(baud) }),
+          body: JSON.stringify({
+            port,
+            baudrate: parseInt(baud),
+            data_bits: parseInt(dataBits),
+            parity,
+            stop_bits: parseFloat(stopBits),
+            flow_control: flowControl,
+          }),
         });
         const data = await res.json();
 

@@ -336,6 +336,48 @@ class TestKnownConfigItems(unittest.TestCase):
         self.assertEqual(item.ui_multiplier, 1000)
         self.assertEqual(item.unit, "ms")
 
+    def test_data_bits_config(self):
+        """Test data_bits configuration."""
+        item = get_schema_by_key("data_bits")
+        self.assertIsNotNone(item)
+        self.assertEqual(item.group, ConfigGroup.CONNECTION)
+        self.assertEqual(item.config_type, ConfigType.NUMBER)
+        self.assertEqual(item.default, 8)
+        self.assertFalse(item.show_in_sidebar)
+
+    def test_parity_config(self):
+        """Test parity configuration."""
+        item = get_schema_by_key("parity")
+        self.assertIsNotNone(item)
+        self.assertEqual(item.group, ConfigGroup.CONNECTION)
+        self.assertEqual(item.config_type, ConfigType.STRING)
+        self.assertEqual(item.default, "none")
+        self.assertFalse(item.show_in_sidebar)
+
+    def test_stop_bits_config(self):
+        """Test stop_bits configuration."""
+        item = get_schema_by_key("stop_bits")
+        self.assertIsNotNone(item)
+        self.assertEqual(item.group, ConfigGroup.CONNECTION)
+        self.assertEqual(item.config_type, ConfigType.NUMBER)
+        self.assertEqual(item.default, 1)
+        self.assertFalse(item.show_in_sidebar)
+
+    def test_flow_control_config(self):
+        """Test flow_control configuration."""
+        item = get_schema_by_key("flow_control")
+        self.assertIsNotNone(item)
+        self.assertEqual(item.group, ConfigGroup.CONNECTION)
+        self.assertEqual(item.config_type, ConfigType.STRING)
+        self.assertEqual(item.default, "none")
+        self.assertFalse(item.show_in_sidebar)
+
+    def test_serial_detail_items_not_in_sidebar(self):
+        """Test that serial detail items are excluded from sidebar."""
+        sidebar_keys = {item.key for item in get_sidebar_schema()}
+        for key in ["data_bits", "parity", "stop_bits", "flow_control"]:
+            self.assertNotIn(key, sidebar_keys)
+
 
 if __name__ == "__main__":
     unittest.main()

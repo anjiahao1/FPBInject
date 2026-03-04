@@ -9,55 +9,99 @@
       </summary>
       <div class="sidebar-content">
         <div class="flex-col">
-          <div class="flex-row">
-            <select
-              id="portSelect"
-              class="vscode-select"
-              title="Serial Port"
-              data-i18n="[title]connection.port"
-            ></select>
-            <button
-              class="vscode-btn icon-only secondary"
-              onclick="refreshPorts()"
-              title="Refresh Ports"
-              data-i18n="[title]buttons.refresh"
-            >
-              <i class="codicon codicon-refresh"></i>
-            </button>
+          <div class="config-item">
+            <label data-i18n="connection.port">Port</label>
+            <div class="config-item-control flex-row">
+              <select
+                id="portSelect"
+                class="vscode-select"
+                title="Serial Port"
+                data-i18n="[title]connection.port"
+              ></select>
+              <button
+                class="vscode-btn icon-only secondary"
+                onclick="refreshPorts()"
+                title="Refresh Ports"
+                data-i18n="[title]buttons.refresh"
+              >
+                <i class="codicon codicon-refresh"></i>
+              </button>
+            </div>
           </div>
-          <div class="flex-row">
-            <input
-              type="text"
-              id="baudrate"
-              class="vscode-input"
-              value="115200"
-              placeholder="Baudrate"
-              list="baudrateList"
-              data-i18n="[placeholder]connection.baudrate"
-            />
-            <datalist id="baudrateList">
-              <option value="9600"></option>
-              <option value="19200"></option>
-              <option value="38400"></option>
-              <option value="57600"></option>
-              <option value="115200"></option>
-              <option value="230400"></option>
-              <option value="460800"></option>
-              <option value="921600"></option>
-              <option value="1000000"></option>
-              <option value="1500000"></option>
-              <option value="2000000"></option>
-            </datalist>
-            <button
-              id="connectBtn"
-              class="vscode-btn"
-              onclick="toggleConnect()"
-              style="flex: 1"
-              data-i18n="connection.connect"
-            >
-              Connect
-            </button>
+          <div class="config-item">
+            <label data-i18n="connection.baudrate">Baudrate</label>
+            <div class="config-item-control flex-row">
+              <input
+                type="text"
+                id="baudrate"
+                class="vscode-input"
+                value="115200"
+                placeholder="Baudrate"
+                list="baudrateList"
+                data-i18n="[placeholder]connection.baudrate"
+              />
+              <datalist id="baudrateList">
+                <option value="9600"></option>
+                <option value="19200"></option>
+                <option value="38400"></option>
+                <option value="57600"></option>
+                <option value="115200"></option>
+                <option value="230400"></option>
+                <option value="460800"></option>
+                <option value="921600"></option>
+                <option value="1000000"></option>
+                <option value="1500000"></option>
+                <option value="2000000"></option>
+              </datalist>
+            </div>
           </div>
+          <details id="serialDetailsToggle" class="serial-details-toggle">
+            <summary class="serial-details-summary">
+              <i class="codicon codicon-chevron-right"></i>
+              <span data-i18n="connection.advanced_settings">Advanced Settings</span>
+            </summary>
+            <div class="serial-details-content">
+              <div class="config-item">
+                <label data-i18n="connection.data_bits">Data Bits</label>
+                <select id="dataBits" class="vscode-select">
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8" selected>8</option>
+                </select>
+              </div>
+              <div class="config-item">
+                <label data-i18n="connection.parity">Parity</label>
+                <select id="parity" class="vscode-select">
+                  <option value="none" data-i18n="connection.parity_none">None</option>
+                  <option value="even" data-i18n="connection.parity_even">Even</option>
+                  <option value="odd" data-i18n="connection.parity_odd">Odd</option>
+                  <option value="mark" data-i18n="connection.parity_mark">Mark</option>
+                  <option value="space" data-i18n="connection.parity_space">Space</option>
+                </select>
+              </div>
+              <div class="config-item">
+                <label data-i18n="connection.stop_bits">Stop Bits</label>
+                <select id="stopBits" class="vscode-select">
+                  <option value="1" selected>1</option>
+                  <option value="1.5">1.5</option>
+                  <option value="2">2</option>
+                </select>
+              </div>
+              <div class="config-item">
+                <label data-i18n="connection.flow_control">Flow Control</label>
+                <select id="flowControl" class="vscode-select">
+                  <option value="none" data-i18n="connection.flow_none">None</option>
+                  <option value="rtscts">RTS/CTS</option>
+                  <option value="dsrdtr">DSR/DTR</option>
+                  <option value="xonxoff">XON/XOFF</option>
+                </select>
+              </div>
+            </div>
+          </details>
+          <button id="connectBtn" class="vscode-btn" onclick="toggleConnect()" data-i18n="connection.connect">
+            Connect
+          </button>
         </div>
       </div>
       <div class="sidebar-section-resize-handle"></div>

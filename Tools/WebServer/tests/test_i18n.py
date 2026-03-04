@@ -876,6 +876,10 @@ class TestHardcodedTextDetection(unittest.TestCase):
             "ROM",
             "TX",
             "RX",
+            # Serial protocol terms
+            "RTS/CTS",
+            "DSR/DTR",
+            "XON/XOFF",
             # Numbers and symbols only
         ]
 

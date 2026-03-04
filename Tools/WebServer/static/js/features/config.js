@@ -47,6 +47,24 @@ async function loadConfig() {
       if (baudrateEl) baudrateEl.value = data.baudrate;
     }
 
+    // Load serial detail settings (connection section, not in schema UI)
+    if (data.data_bits) {
+      const el = document.getElementById('dataBits');
+      if (el) el.value = data.data_bits;
+    }
+    if (data.parity) {
+      const el = document.getElementById('parity');
+      if (el) el.value = data.parity;
+    }
+    if (data.stop_bits) {
+      const el = document.getElementById('stopBits');
+      if (el) el.value = data.stop_bits;
+    }
+    if (data.flow_control) {
+      const el = document.getElementById('flowControl');
+      if (el) el.value = data.flow_control;
+    }
+
     // Load all config values using schema
     await loadConfigValuesFromData(data);
 

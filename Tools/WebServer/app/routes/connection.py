@@ -75,6 +75,10 @@ def api_connect():
     port = data.get("port")
     baudrate = data.get("baudrate", 115200)
     timeout = data.get("timeout", 2)
+    data_bits = data.get("data_bits", 8)
+    parity = data.get("parity", "none")
+    stop_bits = data.get("stop_bits", 1)
+    flow_control = data.get("flow_control", "none")
 
     if not port:
         return jsonify({"success": False, "error": "Port not specified"})
@@ -94,7 +98,15 @@ def api_connect():
                 pass
             device.ser = None
 
-        ser, error = serial_open(port, baudrate, timeout)
+        ser, error = serial_open(
+            port,
+            baudrate,
+            timeout,
+            data_bits=data_bits,
+            parity=parity,
+            stop_bits=stop_bits,
+            flow_control=flow_control,
+        )
         if error:
             result["error"] = error
         else:
@@ -102,6 +114,10 @@ def api_connect():
             device.port = port
             device.baudrate = baudrate
             device.timeout = timeout
+            device.data_bits = data_bits
+            device.parity = parity
+            device.stop_bits = stop_bits
+            device.flow_control = flow_control
 
     if not run_in_device_worker(device, do_connect, timeout=5.0):
         return jsonify({"success": False, "error": "Connect timeout"})

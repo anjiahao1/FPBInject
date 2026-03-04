@@ -1543,6 +1543,53 @@ input[type="checkbox"] {
   margin-top: 4px;
 }
 
+/* Serial details toggle (connection panel) */
+.serial-details-toggle {
+  margin: 2px 0;
+}
+
+.serial-details-summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  opacity: 0.7;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  padding: 2px 0;
+}
+
+.serial-details-summary::-webkit-details-marker {
+  display: none;
+}
+
+.serial-details-toggle[open] > .serial-details-summary .codicon-chevron-right {
+  transform: rotate(90deg);
+}
+
+.serial-details-summary .codicon {
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.serial-details-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.serial-details-content .config-item .vscode-select {
+  flex: 1;
+}
+
+/* Connection panel config-item-control */
+.config-item-control {
+  flex: 1;
+  min-width: 0;
+}
+
 .config-path-list-header {
   display: flex;
   align-items: center;

@@ -9,6 +9,8 @@ import sys
 import unittest
 from unittest.mock import Mock, patch
 
+import serial
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils import serial as serial_utils  # noqa: E402
@@ -144,7 +146,16 @@ class TestSerialOpen(unittest.TestCase):
         self.assertEqual(ser, mock_ser)
         self.assertIsNone(error)
         mock_serial.assert_called_with(
-            "/dev/ttyUSB0", 115200, timeout=1, write_timeout=1
+            "/dev/ttyUSB0",
+            115200,
+            bytesize=8,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            xonxoff=False,
+            rtscts=False,
+            dsrdtr=False,
+            timeout=1,
+            write_timeout=1,
         )
 
     @patch("utils.serial.serial.Serial")
@@ -180,6 +191,82 @@ class TestSerialOpen(unittest.TestCase):
 
         self.assertIsNone(ser)
         self.assertIn("Error", error)
+
+    @patch("utils.serial.serial.Serial")
+    def test_open_with_custom_serial_params(self, mock_serial):
+        """Test opening port with custom data_bits, parity, stop_bits, flow_control"""
+        mock_ser = Mock()
+        mock_ser.isOpen.return_value = True
+        mock_serial.return_value = mock_ser
+
+        ser, error = serial_utils.serial_open(
+            "/dev/ttyUSB0",
+            9600,
+            2.0,
+            data_bits=7,
+            parity="even",
+            stop_bits=2,
+            flow_control="rtscts",
+        )
+
+        self.assertEqual(ser, mock_ser)
+        self.assertIsNone(error)
+        mock_serial.assert_called_with(
+            "/dev/ttyUSB0",
+            9600,
+            bytesize=7,
+            parity=serial.PARITY_EVEN,
+            stopbits=serial.STOPBITS_TWO,
+            xonxoff=False,
+            rtscts=True,
+            dsrdtr=False,
+            timeout=2.0,
+            write_timeout=2.0,
+        )
+
+    @patch("utils.serial.serial.Serial")
+    def test_open_with_xonxoff_flow(self, mock_serial):
+        """Test opening port with XON/XOFF flow control"""
+        mock_ser = Mock()
+        mock_ser.isOpen.return_value = True
+        mock_serial.return_value = mock_ser
+
+        ser, error = serial_utils.serial_open("/dev/ttyUSB0", flow_control="xonxoff")
+
+        self.assertEqual(ser, mock_ser)
+        self.assertIsNone(error)
+        call_kwargs = mock_serial.call_args
+        self.assertTrue(
+            call_kwargs[1]["xonxoff"]
+            if 1 in call_kwargs
+            else call_kwargs.kwargs["xonxoff"]
+        )
+
+    @patch("utils.serial.serial.Serial")
+    def test_open_with_odd_parity(self, mock_serial):
+        """Test opening port with odd parity"""
+        mock_ser = Mock()
+        mock_ser.isOpen.return_value = True
+        mock_serial.return_value = mock_ser
+
+        ser, error = serial_utils.serial_open("/dev/ttyUSB0", parity="odd")
+
+        self.assertIsNone(error)
+        _, kwargs = mock_serial.call_args
+        self.assertEqual(kwargs["parity"], serial.PARITY_ODD)
+
+    @patch("utils.serial.serial.Serial")
+    def test_open_with_unknown_parity_defaults_to_none(self, mock_serial):
+        """Test opening port with unknown parity falls back to PARITY_NONE"""
+        mock_ser = Mock()
+        mock_ser.isOpen.return_value = True
+        mock_serial.return_value = mock_ser
+
+        ser, error = serial_utils.serial_open("/dev/ttyUSB0", parity="invalid")
+
+        self.assertIsNone(error)
+        _, kwargs = mock_serial.call_args
+        self.assertEqual(kwargs["parity"], serial.PARITY_NONE)
 
 
 class TestSerialWrite(unittest.TestCase):

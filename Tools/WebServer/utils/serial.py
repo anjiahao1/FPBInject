@@ -38,10 +38,51 @@ def scan_serial_ports():
     return result
 
 
-def serial_open(port, baudrate=115200, timeout=2.0):
-    """Open a serial port."""
+def serial_open(
+    port,
+    baudrate=115200,
+    timeout=2.0,
+    data_bits=8,
+    parity="none",
+    stop_bits=1,
+    flow_control="none",
+):
+    """Open a serial port.
+
+    Args:
+        port: Serial port path
+        baudrate: Baud rate (default: 115200)
+        timeout: Read/write timeout in seconds (default: 2.0)
+        data_bits: Data bits, 5/6/7/8 (default: 8)
+        parity: Parity, none/even/odd/mark/space (default: none)
+        stop_bits: Stop bits, 1/1.5/2 (default: 1)
+        flow_control: Flow control, none/rtscts/dsrdtr/xonxoff (default: none)
+    """
+    PARITY_MAP = {
+        "none": serial.PARITY_NONE,
+        "even": serial.PARITY_EVEN,
+        "odd": serial.PARITY_ODD,
+        "mark": serial.PARITY_MARK,
+        "space": serial.PARITY_SPACE,
+    }
+    STOPBITS_MAP = {
+        1: serial.STOPBITS_ONE,
+        1.5: serial.STOPBITS_ONE_POINT_FIVE,
+        2: serial.STOPBITS_TWO,
+    }
     try:
-        ser = serial.Serial(port, baudrate, timeout=timeout, write_timeout=timeout)
+        ser = serial.Serial(
+            port,
+            baudrate,
+            bytesize=int(data_bits),
+            parity=PARITY_MAP.get(parity, serial.PARITY_NONE),
+            stopbits=STOPBITS_MAP.get(float(stop_bits), serial.STOPBITS_ONE),
+            xonxoff=(flow_control == "xonxoff"),
+            rtscts=(flow_control == "rtscts"),
+            dsrdtr=(flow_control == "dsrdtr"),
+            timeout=timeout,
+            write_timeout=timeout,
+        )
         if not ser.isOpen():
             return None, f"Error opening serial port {port}"
         ser.reset_input_buffer()
