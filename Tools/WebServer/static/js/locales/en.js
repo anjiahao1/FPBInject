@@ -456,6 +456,28 @@ window.i18nResources['en'] = {
       symbols_decompile_desc:
         'Generate pseudo-C code using Ghidra for better understanding.',
 
+      editor_title: 'Code Editor',
+      editor_desc: 'The Editor area is where you write and edit patch code.',
+      editor_tabs: 'File Tabs',
+      editor_tabs_desc:
+        'Open multiple patch files and switch between them using tabs.',
+      editor_edit: 'Code Editing',
+      editor_edit_desc:
+        'Write your patch code with syntax highlighting. Use the <code>/* FPB_INJECT */</code> marker to indicate injectable functions.',
+      editor_inject: 'Save & Inject',
+      editor_inject_desc:
+        'Save your patch file and click Inject to apply it to the device, or enable auto-inject for hands-free workflow.',
+
+      logs_title: 'Output & Serial',
+      logs_desc:
+        'The bottom panel shows system output and serial communication.',
+      logs_output: 'Output',
+      logs_output_desc:
+        'View compilation results, injection logs, and system messages.',
+      logs_serial: 'Serial',
+      logs_serial_desc:
+        'Interactive serial terminal for direct communication with your device. You can send commands and see real-time responses.',
+
       config_title: 'Configuration',
       config_desc: 'The Configuration section contains all workbench settings.',
       config_ui: 'UI Settings',
@@ -497,6 +519,8 @@ window.i18nResources['en'] = {
       gate_config_toolchain: 'Toolchain',
       gate_config_watchdirs: 'Watch Directories',
       gate_config_autoinject: 'Auto-Inject',
+      gate_logs: '⏳ Please click the "Serial" tab in the bottom panel.',
+      gate_logs_ok: '✅ Serial terminal is now active!',
     },
   },
 };

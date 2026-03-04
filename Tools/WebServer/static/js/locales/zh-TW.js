@@ -423,6 +423,25 @@ window.i18nResources['zh-TW'] = {
       symbols_decompile: '反編譯',
       symbols_decompile_desc: '使用 Ghidra 產生偽 C 程式碼以便更好理解。',
 
+      editor_title: '程式碼編輯器',
+      editor_desc: '編輯器區域用於撰寫和修改補丁程式碼。',
+      editor_tabs: '檔案標籤',
+      editor_tabs_desc: '開啟多個補丁檔案，透過標籤頁在它們之間切換。',
+      editor_edit: '程式碼編輯',
+      editor_edit_desc:
+        '使用語法醒目提示撰寫補丁程式碼。使用 <code>/* FPB_INJECT */</code> 標記來指定可注入的函式。',
+      editor_inject: '儲存和注入',
+      editor_inject_desc:
+        '儲存補丁檔案並點擊注入按鈕將其套用到裝置，或啟用自動注入實現免手動操作。',
+
+      logs_title: '輸出和串列埠',
+      logs_desc: '底部面板顯示系統輸出和串列埠通訊。',
+      logs_output: '輸出',
+      logs_output_desc: '檢視編譯結果、注入日誌和系統訊息。',
+      logs_serial: '串列埠',
+      logs_serial_desc:
+        '互動式串列埠終端，用於與裝置直接通訊。您可以傳送命令並檢視即時回應。',
+
       config_title: '設定',
       config_desc: '設定區域包含所有工作台設定。',
       config_ui: 'UI 設定',
@@ -460,6 +479,8 @@ window.i18nResources['zh-TW'] = {
       gate_config_toolchain: '工具鏈',
       gate_config_watchdirs: '監控目錄',
       gate_config_autoinject: '自動注入',
+      gate_logs: '⏳ 請點擊底部面板的「串列埠」標籤。',
+      gate_logs_ok: '✅ 串列埠終端已啟用！',
     },
   },
 };

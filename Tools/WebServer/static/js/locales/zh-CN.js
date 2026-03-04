@@ -422,6 +422,25 @@ window.i18nResources['zh-CN'] = {
       symbols_decompile: '反编译',
       symbols_decompile_desc: '使用 Ghidra 生成伪 C 代码以便更好理解。',
 
+      editor_title: '代码编辑器',
+      editor_desc: '编辑器区域用于编写和修改补丁代码。',
+      editor_tabs: '文件标签',
+      editor_tabs_desc: '打开多个补丁文件，通过标签页在它们之间切换。',
+      editor_edit: '代码编辑',
+      editor_edit_desc:
+        '使用语法高亮编写补丁代码。使用 <code>/* FPB_INJECT */</code> 标记来指定可注入的函数。',
+      editor_inject: '保存和注入',
+      editor_inject_desc:
+        '保存补丁文件并点击注入按钮将其应用到设备，或启用自动注入实现免手动操作。',
+
+      logs_title: '输出和串口',
+      logs_desc: '底部面板显示系统输出和串口通信。',
+      logs_output: '输出',
+      logs_output_desc: '查看编译结果、注入日志和系统消息。',
+      logs_serial: '串口',
+      logs_serial_desc:
+        '交互式串口终端，用于与设备直接通信。您可以发送命令并查看实时响应。',
+
       config_title: '配置',
       config_desc: '配置区域包含所有工作台设置。',
       config_ui: 'UI 设置',
@@ -459,6 +478,8 @@ window.i18nResources['zh-CN'] = {
       gate_config_toolchain: '工具链',
       gate_config_watchdirs: '监控目录',
       gate_config_autoinject: '自动注入',
+      gate_logs: '⏳ 请点击底部面板的「串口」标签。',
+      gate_logs_ok: '✅ 串口终端已激活！',
     },
   },
 };
