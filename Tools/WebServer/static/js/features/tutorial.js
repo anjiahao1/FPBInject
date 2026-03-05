@@ -72,6 +72,7 @@ let tutorialActive = false;
 let tutorialStepConfigured = {};
 let currentHighlightedElement = null;
 let tutorialGatePollTimer = null;
+let tutorialDraggedByUser = false;
 
 /* ===========================
    UI HIGHLIGHTING
@@ -215,6 +216,7 @@ function startTutorial() {
   tutorialStep = 0;
   tutorialActive = true;
   tutorialStepConfigured = {};
+  resetTutorialPosition();
   renderTutorialStep();
   const overlay = document.getElementById('tutorialOverlay');
   if (overlay) overlay.classList.add('show');
@@ -285,6 +287,7 @@ function renderTutorialStep() {
   if (!body || !step) return;
 
   clearHighlight();
+  tutorialDraggedByUser = false;
 
   // Title
   if (title) title.textContent = t(`tutorial.${step.id}_title`, step.id);
@@ -307,10 +310,17 @@ function renderTutorialStep() {
   }
 
   // Activate sidebar and highlight
+  const overlay = document.getElementById('tutorialOverlay');
+  const needsBlocking = !step.sidebar && !step.highlight;
+  if (overlay) {
+    overlay.classList.toggle('tutorial-blocking', needsBlocking);
+  }
+
   if (step.sidebar) {
     activateSidebarForStep(step.sidebar);
     setTimeout(() => {
       highlightElement(`#${step.sidebar}`);
+      positionModalNearTarget(`#${step.sidebar}`);
       // Apply per-field visual guides for config gate
       if (step.id === 'config') {
         setTimeout(() => highlightConfigGateFields(), 100);
@@ -319,7 +329,10 @@ function renderTutorialStep() {
   } else if (step.highlight) {
     setTimeout(() => {
       highlightNonSidebarElement(step.highlight);
+      positionModalNearTarget(step.highlight);
     }, 300);
+  } else {
+    positionModalNearTarget(null);
   }
 
   renderTutorialProgress();
@@ -771,6 +784,148 @@ const stepRenderers = {
     `;
   },
 };
+
+/* ===========================
+   DRAG SUPPORT
+   =========================== */
+
+function initTutorialDrag() {
+  const header = document.querySelector('.tutorial-header');
+  const modal = document.querySelector('.tutorial-modal');
+  if (!header || !modal) return;
+
+  let dragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  header.addEventListener('mousedown', (e) => {
+    if (e.target.tagName === 'SELECT' || e.target.tagName === 'BUTTON') return;
+    dragging = true;
+    tutorialDraggedByUser = true;
+    const rect = modal.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+
+    // Switch from flex-centered to absolute positioning
+    modal.style.transition = 'none';
+    modal.style.position = 'fixed';
+    modal.style.left = rect.left + 'px';
+    modal.style.top = rect.top + 'px';
+    modal.style.margin = '0';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    let x = e.clientX - offsetX;
+    let y = e.clientY - offsetY;
+
+    // Clamp to viewport
+    const rect = modal.getBoundingClientRect();
+    x = Math.max(0, Math.min(x, window.innerWidth - rect.width));
+    y = Math.max(0, Math.min(y, window.innerHeight - rect.height));
+
+    modal.style.left = x + 'px';
+    modal.style.top = y + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (dragging) {
+      dragging = false;
+      modal.style.transition = '';
+    }
+  });
+}
+
+// Reset modal position when tutorial restarts
+function resetTutorialPosition() {
+  const modal = document.querySelector('.tutorial-modal');
+  if (modal) {
+    modal.style.position = '';
+    modal.style.left = '';
+    modal.style.top = '';
+    modal.style.margin = '';
+    modal.classList.remove('tutorial-modal-positioned');
+  }
+}
+
+/**
+ * Position the tutorial modal next to the highlighted target element.
+ * Prefers placing to the right; falls back to left, then centers.
+ * For steps with no highlight target, resets to centered layout.
+ */
+function positionModalNearTarget(targetSelector) {
+  const modal = document.querySelector('.tutorial-modal');
+  if (!modal) return;
+
+  // User dragged the modal — respect their position
+  if (tutorialDraggedByUser) return;
+
+  // No target — reset to flex-centered
+  if (!targetSelector) {
+    // Only reset if currently positioned
+    if (modal.classList.contains('tutorial-modal-positioned')) {
+      resetTutorialPosition();
+    }
+    return;
+  }
+
+  const target = document.querySelector(targetSelector);
+  if (!target) return;
+
+  const targetRect = target.getBoundingClientRect();
+  const modalRect = modal.getBoundingClientRect();
+  const gap = 16; // px gap between target and modal
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const mw = modalRect.width;
+  const mh = modalRect.height;
+
+  let x, y;
+
+  // Try right of target
+  if (targetRect.right + gap + mw <= vw) {
+    x = targetRect.right + gap;
+  }
+  // Try left of target
+  else if (targetRect.left - gap - mw >= 0) {
+    x = targetRect.left - gap - mw;
+  }
+  // Fallback: center horizontally
+  else {
+    x = Math.max(0, (vw - mw) / 2);
+  }
+
+  // Vertically align to target center, clamped to viewport
+  y = targetRect.top + targetRect.height / 2 - mh / 2;
+  y = Math.max(gap, Math.min(y, vh - mh - gap));
+
+  // Switch to fixed positioning with transition
+  if (!modal.classList.contains('tutorial-modal-positioned')) {
+    // FLIP: capture current center position, then animate to target
+    const currentRect = modal.getBoundingClientRect();
+    modal.style.transition = 'none';
+    modal.style.position = 'fixed';
+    modal.style.margin = '0';
+    modal.style.left = currentRect.left + 'px';
+    modal.style.top = currentRect.top + 'px';
+    modal.classList.add('tutorial-modal-positioned');
+    // Next frame: enable transition and move to target
+    requestAnimationFrame(() => {
+      modal.style.transition = '';
+      requestAnimationFrame(() => {
+        modal.style.left = x + 'px';
+        modal.style.top = y + 'px';
+      });
+    });
+  } else {
+    modal.style.left = x + 'px';
+    modal.style.top = y + 'px';
+  }
+}
+
+// Init drag on page load
+document.addEventListener('DOMContentLoaded', initTutorialDrag);
 
 /* ===========================
    EXPORTS

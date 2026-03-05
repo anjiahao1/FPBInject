@@ -9,6 +9,11 @@
   pointer-events: none;
 }
 
+.tutorial-overlay.tutorial-blocking {
+  background: rgba(0, 0, 0, 0.35) !important;
+  pointer-events: auto;
+}
+
 .tutorial-overlay .tutorial-modal {
   pointer-events: auto;
 }
@@ -19,6 +24,9 @@
   max-height: 80vh;
   display: flex;
   flex-direction: column;
+  transition:
+    left 0.35s ease,
+    top 0.35s ease;
 }
 
 /* --- UI Highlighting System --- */
@@ -59,6 +67,8 @@
   justify-content: space-between;
   padding: 14px 20px;
   border-bottom: 1px solid var(--vscode-border);
+  cursor: move;
+  user-select: none;
 }
 
 .tutorial-title {
