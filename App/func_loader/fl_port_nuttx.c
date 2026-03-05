@@ -183,7 +183,10 @@ static int interactive_mode(fl_context_t* ctx) {
 
         int argc = parse_line(line, argv, sizeof(argv) / sizeof(argv[0]));
         if (argc > 0) {
-            fl_exec_cmd(ctx, argc, argv);
+            const int ret = fl_exec_cmd(ctx, argc, argv);
+            if (ret != 0) {
+                return ret;
+            }
         }
     }
 

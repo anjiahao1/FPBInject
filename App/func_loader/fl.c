@@ -1000,5 +1000,4 @@ int fl_exec_cmd(fl_context_t* ctx, int argc, const char** argv) {
     }
 
     return 0;
-    ;
 }
