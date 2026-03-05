@@ -12,6 +12,37 @@ let backendHealthCheckTimer = null;
 let backendDisconnectAlertShown = false;
 
 /**
+ * Handle baud rate dropdown change.
+ * When "custom" is selected, show the custom input and open advanced settings.
+ */
+function onBaudrateSelectChange() {
+  const sel = document.getElementById('baudrate');
+  const customItem = document.getElementById('customBaudrateItem');
+  const advToggle = document.getElementById('serialDetailsToggle');
+  if (!sel || !customItem) return;
+  if (sel.value === 'custom') {
+    customItem.style.display = '';
+    if (advToggle) advToggle.open = true;
+    const input = document.getElementById('customBaudrate');
+    if (input) input.focus();
+  } else {
+    customItem.style.display = 'none';
+  }
+}
+
+/**
+ * Get the effective baud rate value from dropdown or custom input.
+ */
+function getBaudrate() {
+  const sel = document.getElementById('baudrate');
+  if (sel && sel.value === 'custom') {
+    const input = document.getElementById('customBaudrate');
+    return parseInt(input?.value) || 115200;
+  }
+  return parseInt(sel?.value) || 115200;
+}
+
+/**
  * Get max retries from config or use default
  * @returns {number} Max retry count
  */
@@ -116,7 +147,7 @@ async function toggleConnect() {
 
   if (!state.isConnected) {
     const port = document.getElementById('portSelect').value;
-    const baud = document.getElementById('baudrate').value;
+    const baud = getBaudrate();
     const dataBits = document.getElementById('dataBits')?.value || '8';
     const parity = document.getElementById('parity')?.value || 'none';
     const stopBits = document.getElementById('stopBits')?.value || '1';
@@ -148,7 +179,7 @@ async function toggleConnect() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             port,
-            baudrate: parseInt(baud),
+            baudrate: baud,
             data_bits: parseInt(dataBits),
             parity,
             stop_bits: parseFloat(stopBits),
@@ -299,6 +330,8 @@ window.checkBackendHealth = checkBackendHealth;
 window.startBackendHealthCheck = startBackendHealthCheck;
 window.stopBackendHealthCheck = stopBackendHealthCheck;
 window.resetBackendAlertState = resetBackendAlertState;
+window.onBaudrateSelectChange = onBaudrateSelectChange;
+window.getBaudrate = getBaudrate;
 
 // Fix connect button text after translatePage() overwrites it
 document.addEventListener('i18n:translated', () => {

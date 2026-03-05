@@ -61,6 +61,7 @@ window.i18nResources['en'] = {
     connection: {
       port: 'Port',
       baudrate: 'Baud Rate',
+      baudrate_custom: 'Custom',
       connect: 'Connect',
       disconnect: 'Disconnect',
       connecting: 'Connecting...',

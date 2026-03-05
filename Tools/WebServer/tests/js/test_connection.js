@@ -418,6 +418,73 @@ module.exports = function (w) {
     });
   });
 
+  describe('Baudrate Dropdown Functions', () => {
+    it('onBaudrateSelectChange is a function', () =>
+      assertTrue(typeof w.onBaudrateSelectChange === 'function'));
+
+    it('getBaudrate is a function', () =>
+      assertTrue(typeof w.getBaudrate === 'function'));
+
+    it('getBaudrate returns select value for standard baud', () => {
+      resetMocks();
+      const sel = browserGlobals.document.getElementById('baudrate');
+      sel.value = '921600';
+      assertEqual(w.getBaudrate(), 921600);
+    });
+
+    it('getBaudrate returns custom input value when custom selected', () => {
+      resetMocks();
+      const sel = browserGlobals.document.getElementById('baudrate');
+      sel.value = 'custom';
+      const input = browserGlobals.document.getElementById('customBaudrate');
+      input.value = '250000';
+      assertEqual(w.getBaudrate(), 250000);
+    });
+
+    it('getBaudrate returns 115200 as fallback for invalid custom', () => {
+      resetMocks();
+      const sel = browserGlobals.document.getElementById('baudrate');
+      sel.value = 'custom';
+      const input = browserGlobals.document.getElementById('customBaudrate');
+      input.value = '';
+      assertEqual(w.getBaudrate(), 115200);
+    });
+
+    it('onBaudrateSelectChange shows custom input when custom selected', () => {
+      resetMocks();
+      const sel = browserGlobals.document.getElementById('baudrate');
+      const customItem =
+        browserGlobals.document.getElementById('customBaudrateItem');
+      customItem.style.display = 'none';
+      sel.value = 'custom';
+      w.onBaudrateSelectChange();
+      assertEqual(customItem.style.display, '');
+    });
+
+    it('onBaudrateSelectChange hides custom input for standard baud', () => {
+      resetMocks();
+      const sel = browserGlobals.document.getElementById('baudrate');
+      const customItem =
+        browserGlobals.document.getElementById('customBaudrateItem');
+      customItem.style.display = '';
+      sel.value = '115200';
+      w.onBaudrateSelectChange();
+      assertEqual(customItem.style.display, 'none');
+    });
+
+    it('onBaudrateSelectChange opens advanced settings for custom', () => {
+      resetMocks();
+      const sel = browserGlobals.document.getElementById('baudrate');
+      const advToggle = browserGlobals.document.getElementById(
+        'serialDetailsToggle',
+      );
+      advToggle.open = false;
+      sel.value = 'custom';
+      w.onBaudrateSelectChange();
+      assertTrue(advToggle.open);
+    });
+  });
+
   describe('toggleConnect Function - Extended', () => {
     it('handles disconnect failure', async () => {
       w.FPBState.isConnected = true;

@@ -61,6 +61,7 @@ window.i18nResources['zh-CN'] = {
     connection: {
       port: '端口',
       baudrate: '波特率',
+      baudrate_custom: '自定义',
       connect: '连接',
       disconnect: '断开',
       connecting: '连接中...',
