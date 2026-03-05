@@ -168,15 +168,6 @@ def api_get_function_signature():
     # Search in watch directories (make a copy to avoid modifying original)
     watch_dirs = list(device.watch_dirs) if device.watch_dirs else []
 
-    # Also add parent directories of ELF path as potential source locations
-    if device.elf_path and os.path.exists(device.elf_path):
-        elf_dir = os.path.dirname(device.elf_path)
-        # Look for common source directories relative to build dir
-        for parent in [".", "..", "../..", "../../.."]:
-            src_dir = os.path.normpath(os.path.join(elf_dir, parent))
-            if os.path.isdir(src_dir) and src_dir not in watch_dirs:
-                watch_dirs.append(src_dir)
-
     from core.patch_generator import find_function_signature
 
     for watch_dir in watch_dirs:

@@ -383,9 +383,13 @@ def find_function_signature(content: str, func_name: str) -> Optional[str]:
         # Clean up return type - remove any trailing content after the type
         return_type = re.sub(r"\s+", " ", return_type).strip()
 
+        # Strip __attribute__((...)) before validation checks
+        clean_type = re.sub(r"__attribute__\s*\(\([^)]*\)\)", "", return_type).strip()
+        clean_type = re.sub(r"\s+", " ", clean_type)
+
         # Skip if return_type looks like an assignment or function call
         # e.g., "void * new = " or "result = "
-        if "=" in return_type or ";" in return_type or "(" in return_type:
+        if "=" in clean_type or ";" in clean_type or "(" in clean_type:
             continue
 
         # Skip if return_type starts with keywords that indicate a statement

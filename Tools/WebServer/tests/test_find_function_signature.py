@@ -232,6 +232,28 @@ int get_value()
         sig = find_function_signature(code, "get_value")
         self.assertEqual(sig, "int get_value()")
 
+    def test_attribute_noinline_function(self):
+        """Test parsing function with __attribute__((noinline))."""
+        code = """
+__attribute__((noinline)) void fl_cmd_demo(void)
+{
+    printf("Hello");
+}
+"""
+        sig = find_function_signature(code, "fl_cmd_demo")
+        self.assertEqual(sig, "__attribute__((noinline)) void fl_cmd_demo(void)")
+
+    def test_attribute_section_function(self):
+        """Test parsing function with __attribute__((section(...)))."""
+        code = """
+__attribute__((section(".text"))) int my_func(int x)
+{
+    return x;
+}
+"""
+        sig = find_function_signature(code, "my_func")
+        self.assertEqual(sig, '__attribute__((section(".text"))) int my_func(int x)')
+
     def test_complex_real_world_case(self):
         """Test with realistic LVGL-style code."""
         code = """
