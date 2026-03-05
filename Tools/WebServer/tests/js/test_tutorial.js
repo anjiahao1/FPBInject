@@ -15,6 +15,7 @@ const {
   getFetchCalls,
   createMockElement,
   getElement,
+  mockElements,
 } = require('./mocks');
 
 module.exports = function (w) {
@@ -37,12 +38,14 @@ module.exports = function (w) {
     createMockElement('tutorialNextBtn');
     createMockElement('tutorialSkipAllBtn');
     // Add tutorial-modal for positionModalNearTarget coverage
-    const modal = createMockElement('tutorialModal');
-    modal.className = 'tutorial-modal';
-    // Add panelContainer for demo_verify highlight
-    createMockElement('panelContainer');
-    // Add editorContainer for demo_inject highlight
-    createMockElement('editorContainer');
+    const modal = createMockElement('tutorial-modal');
+    modal.classList.add('tutorial-modal');
+    mockElements['tutorial-modal'] = modal;
+    // Add highlight targets for positioning coverage
+    const panel = createMockElement('panelContainer');
+    mockElements['panelContainer'] = panel;
+    const editor = createMockElement('editorContainer');
+    mockElements['editorContainer'] = editor;
   }
 
   /* ===========================
@@ -725,6 +728,55 @@ module.exports = function (w) {
       w.tutorialGoTo(13); // demo_unpatch
       const nextBtn = getElement('tutorialNextBtn');
       assertTrue(nextBtn.disabled);
+    });
+  });
+
+  /* ===========================
+     MODAL POSITIONING
+     =========================== */
+
+  describe('Tutorial - Modal Positioning', () => {
+    it('resetTutorialPosition clears modal styles', () => {
+      resetMocks();
+      setupTutorialDOM();
+      const modal = browserGlobals.document.querySelector('.tutorial-modal');
+      modal.style.position = 'fixed';
+      modal.style.left = '100px';
+      modal.style.top = '200px';
+      modal.classList.add('tutorial-modal-positioned');
+      w.resetTutorialPosition();
+      assertEqual(modal.style.position, '');
+      assertEqual(modal.style.left, '');
+      assertEqual(modal.style.top, '');
+      assertFalse(modal.classList.contains('tutorial-modal-positioned'));
+    });
+
+    it('positionModalNearTarget with null resets position', () => {
+      resetMocks();
+      setupTutorialDOM();
+      const modal = browserGlobals.document.querySelector('.tutorial-modal');
+      modal.classList.add('tutorial-modal-positioned');
+      modal.style.position = 'fixed';
+      w.positionModalNearTarget(null);
+      assertEqual(modal.style.position, '');
+    });
+
+    it('positionModalNearTarget with selector positions modal', () => {
+      resetMocks();
+      setupTutorialDOM();
+      w.positionModalNearTarget('#panelContainer');
+      const modal = browserGlobals.document.querySelector('.tutorial-modal');
+      assertTrue(modal.classList.contains('tutorial-modal-positioned'));
+    });
+
+    it('positionModalNearTarget with already-positioned modal updates position', () => {
+      resetMocks();
+      setupTutorialDOM();
+      const modal = browserGlobals.document.querySelector('.tutorial-modal');
+      modal.classList.add('tutorial-modal-positioned');
+      modal.style.position = 'fixed';
+      w.positionModalNearTarget('#editorContainer');
+      assertTrue(modal.style.left !== '');
     });
   });
 };

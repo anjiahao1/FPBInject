@@ -80,6 +80,10 @@ function createMockElement(id) {
       pointerEvents: '',
       flex: '',
       position: '',
+      left: '',
+      top: '',
+      margin: '',
+      transition: '',
     },
 
     offsetHeight: 300,
@@ -319,6 +323,11 @@ const mockDocument = {
     return [];
   },
   querySelector(selector) {
+    // Handle #id selectors
+    if (selector.startsWith('#')) {
+      const id = selector.slice(1);
+      return mockElements[id] || null;
+    }
     // Handle .slot-item[data-slot="N"] selector directly
     if (selector.includes('.slot-item[data-slot=')) {
       const match = selector.match(/\[data-slot="(\d+)"\]/);

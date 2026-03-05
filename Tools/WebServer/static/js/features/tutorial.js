@@ -1103,3 +1103,5 @@ window.finishTutorial = finishTutorial;
 window.renderTutorialStep = renderTutorialStep;
 window.renderGateStatus = renderGateStatus;
 window.getStepGateStatus = getStepGateStatus;
+window.resetTutorialPosition = resetTutorialPosition;
+window.positionModalNearTarget = positionModalNearTarget;
