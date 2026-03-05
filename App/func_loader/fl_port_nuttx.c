@@ -185,7 +185,7 @@ static int interactive_mode(fl_context_t* ctx) {
         if (argc > 0) {
             const int ret = fl_exec_cmd(ctx, argc, argv);
             if (ret != 0) {
-                return ret;
+                printf("Type 'q' to exit\n\n");
             }
         }
     }
