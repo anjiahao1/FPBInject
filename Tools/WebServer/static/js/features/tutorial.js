@@ -40,7 +40,17 @@ const TUTORIAL_STEPS = [
   },
   { id: 'symbols', sidebar: 'details-symbols' },
   { id: 'editor', sidebar: null, highlight: '#editorContainer' },
-  { id: 'logs', sidebar: null, highlight: '#panelContainer' },
+  {
+    id: 'logs',
+    sidebar: null,
+    highlight: '#panelContainer',
+    gate: () => {
+      const tabBtnRaw = document.getElementById('tabBtnRaw');
+      return !!(tabBtnRaw && tabBtnRaw.classList.contains('active'));
+    },
+    gateHint: 'tutorial.gate_logs',
+    gateOk: 'tutorial.gate_logs_ok',
+  },
   {
     id: 'config',
     sidebar: 'details-configuration',
@@ -701,6 +711,7 @@ const stepRenderers = {
   },
 
   logs() {
+    const step = TUTORIAL_STEPS.find((s) => s.id === 'logs');
     return `
       <p>${t('tutorial.logs_desc', 'The bottom panel shows system output and serial communication.')}</p>
       <div class="tutorial-feature-list">
@@ -719,6 +730,7 @@ const stepRenderers = {
           </div>
         </div>
       </div>
+      ${renderGateStatus(step)}
     `;
   },
 
