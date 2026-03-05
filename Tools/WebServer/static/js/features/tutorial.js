@@ -29,18 +29,6 @@ const TUTORIAL_STEPS = [
   { id: 'quickcmd', sidebar: 'details-quick-commands' },
   { id: 'transfer', sidebar: 'details-transfer' },
   { id: 'symbols', sidebar: 'details-symbols' },
-  { id: 'editor', sidebar: null, highlight: '#editorContainer' },
-  {
-    id: 'logs',
-    sidebar: null,
-    highlight: '#panelContainer',
-    gate: () => {
-      const tabBtnRaw = document.getElementById('tabBtnRaw');
-      return !!(tabBtnRaw && tabBtnRaw.classList.contains('active'));
-    },
-    gateHint: 'tutorial.gate_logs',
-    gateOk: 'tutorial.gate_logs_ok',
-  },
   {
     id: 'config',
     sidebar: 'details-configuration',
@@ -716,59 +704,6 @@ const stepRenderers = {
           </div>
         </div>
       </div>
-    `;
-  },
-
-  editor() {
-    return `
-      <p>${t('tutorial.editor_desc', 'The Editor area is where you write and edit patch code.')}</p>
-      <div class="tutorial-feature-list">
-        <div class="tutorial-feature-item">
-          <i class="codicon codicon-file-code"></i>
-          <div>
-            <strong>${t('tutorial.editor_tabs', 'File Tabs')}</strong>
-            ${t('tutorial.editor_tabs_desc', 'Open multiple patch files and switch between them using tabs.')}
-          </div>
-        </div>
-        <div class="tutorial-feature-item">
-          <i class="codicon codicon-edit"></i>
-          <div>
-            <strong>${t('tutorial.editor_edit', 'Code Editing')}</strong>
-            ${t('tutorial.editor_edit_desc', 'Write your patch code with syntax highlighting. Use the <code>/* FPB_INJECT */</code> marker to indicate injectable functions.')}
-          </div>
-        </div>
-        <div class="tutorial-feature-item">
-          <i class="codicon codicon-play"></i>
-          <div>
-            <strong>${t('tutorial.editor_inject', 'Save & Inject')}</strong>
-            ${t('tutorial.editor_inject_desc', 'Save your patch file and click Inject to apply it to the device, or enable auto-inject for hands-free workflow.')}
-          </div>
-        </div>
-      </div>
-    `;
-  },
-
-  logs() {
-    const step = TUTORIAL_STEPS.find((s) => s.id === 'logs');
-    return `
-      <p>${t('tutorial.logs_desc', 'The bottom panel shows system output and serial communication.')}</p>
-      <div class="tutorial-feature-list">
-        <div class="tutorial-feature-item">
-          <i class="codicon codicon-output"></i>
-          <div>
-            <strong>${t('tutorial.logs_output', 'Output')}</strong>
-            ${t('tutorial.logs_output_desc', 'View compilation results, injection logs, and system messages.')}
-          </div>
-        </div>
-        <div class="tutorial-feature-item">
-          <i class="codicon codicon-terminal"></i>
-          <div>
-            <strong>${t('tutorial.logs_serial', 'Serial')}</strong>
-            ${t('tutorial.logs_serial_desc', 'Interactive serial terminal for direct communication with your device. You can send commands and see real-time responses.')}
-          </div>
-        </div>
-      </div>
-      ${renderGateStatus(step)}
     `;
   },
 
