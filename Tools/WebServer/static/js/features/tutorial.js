@@ -27,17 +27,7 @@ const TUTORIAL_STEPS = [
     gateOk: 'tutorial.gate_device_ok',
   },
   { id: 'quickcmd', sidebar: 'details-quick-commands' },
-  {
-    id: 'transfer',
-    sidebar: 'details-transfer',
-    gate: () => {
-      const fileList = document.getElementById('deviceFileList');
-      if (!fileList) return false;
-      return !!fileList.querySelector('.device-file-item');
-    },
-    gateHint: 'tutorial.gate_transfer',
-    gateOk: 'tutorial.gate_transfer_ok',
-  },
+  { id: 'transfer', sidebar: 'details-transfer' },
   { id: 'symbols', sidebar: 'details-symbols' },
   { id: 'editor', sidebar: null, highlight: '#editorContainer' },
   {
