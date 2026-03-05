@@ -192,6 +192,31 @@ void test_loader_cmd_clearall(void) {
  * fl_exec_cmd Tests - Core Commands
  * ============================================================================ */
 
+/* Declare fl_cmd_demo (defined in fl.c, non-static) */
+extern void fl_cmd_demo(void);
+
+void test_loader_cmd_demo(void) {
+    setup_loader();
+    fl_init(&test_ctx);
+
+    const char* argv[] = {"fl", "--cmd", "demo"};
+    int result = fl_exec_cmd(&test_ctx, 3, argv);
+
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT(mock_output_contains("DEMO original"));
+    TEST_ASSERT(mock_output_contains("Hello from original fl_cmd_demo"));
+}
+
+void test_loader_cmd_demo_direct_call(void) {
+    setup_loader();
+    fl_init(&test_ctx);
+
+    /* Call fl_cmd_demo directly to verify it is not inlined and is linkable */
+    fl_cmd_demo();
+
+    TEST_ASSERT(mock_output_contains("DEMO original"));
+}
+
 void test_loader_cmd_ping(void) {
     setup_loader();
     fl_init(&test_ctx);
@@ -995,6 +1020,8 @@ void run_loader_tests(void) {
     RUN_TEST(test_loader_cmd_alloc);
     RUN_TEST(test_loader_cmd_alloc_no_size);
     RUN_TEST(test_loader_cmd_alloc_zero);
+    RUN_TEST(test_loader_cmd_demo);
+    RUN_TEST(test_loader_cmd_demo_direct_call);
     TEST_SUITE_END();
 
     TEST_SUITE_BEGIN("func_loader - Patch Commands");
