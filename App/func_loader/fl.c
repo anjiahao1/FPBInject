@@ -152,47 +152,6 @@ static int base64_to_bytes(const char* b64, uint8_t* out, size_t max) {
     return (int)out_len;
 }
 
-static int hex_to_bytes(const char* hex, uint8_t* out, size_t max) {
-    if (!hex || !out)
-        return -1;
-    if (hex[0] == '0' && (hex[1] == 'x' || hex[1] == 'X'))
-        hex += 2;
-
-    size_t hex_len = strlen(hex);
-    if (hex_len % 2 != 0)
-        return -1;
-
-    size_t n = hex_len / 2;
-    if (n > max)
-        return -1;
-
-    for (size_t i = 0; i < n; i++) {
-        uint8_t hi, lo;
-        char c = hex[i * 2];
-        if (c >= '0' && c <= '9')
-            hi = c - '0';
-        else if (c >= 'a' && c <= 'f')
-            hi = c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F')
-            hi = c - 'A' + 10;
-        else
-            return -1;
-
-        c = hex[i * 2 + 1];
-        if (c >= '0' && c <= '9')
-            lo = c - '0';
-        else if (c >= 'a' && c <= 'f')
-            lo = c - 'a' + 10;
-        else if (c >= 'A' && c <= 'F')
-            lo = c - 'A' + 10;
-        else
-            return -1;
-
-        out[i] = (hi << 4) | lo;
-    }
-    return (int)n;
-}
-
 #if FL_USE_FILE
 
 static int bytes_to_base64(const uint8_t* data, size_t len, char* out, size_t max) {
@@ -347,35 +306,10 @@ static void cmd_upload(fl_context_t* ctx, uintptr_t offset, const char* data_str
     static uint8_t buf[2048];
     int n;
 
-    /* Try base64 first (contains uppercase and lowercase letters), then hex */
-    /* Base64 strings typically have length multiple of 4 and may contain A-Z, a-z, 0-9, +, /, = */
-    size_t len = strlen(data_str);
-    bool is_base64 = (len > 0) && (len % 4 == 0);
-
-    /* Check if it looks like base64 (contains lowercase letters or + or /) */
-    if (is_base64) {
-        for (size_t i = 0; i < len && is_base64; i++) {
-            char c = data_str[i];
-            if ((c >= 'a' && c <= 'z') || c == '+' || c == '/') {
-                break; /* Definitely base64 */
-            }
-            if (c == '=' && i >= len - 2) {
-                break; /* Padding at end - base64 */
-            }
-        }
-    }
-
-    if (is_base64) {
-        n = base64_to_bytes(data_str, buf, sizeof(buf));
-    }
-
-    /* Fallback to hex if base64 failed or data looks like hex */
-    if (!is_base64 || n < 0) {
-        n = hex_to_bytes(data_str, buf, sizeof(buf));
-        if (n < 0) {
-            fl_response(false, "Invalid data encoding");
-            return;
-        }
+    n = base64_to_bytes(data_str, buf, sizeof(buf));
+    if (n < 0) {
+        fl_response(false, "Invalid data encoding");
+        return;
     }
 
     if (verify) {
@@ -604,12 +538,8 @@ static void cmd_fwrite(fl_context_t* ctx, const char* data_str, int crc) {
     /* Decode base64 data */
     int n = base64_to_bytes(data_str, ctx->file_ctx.buf, sizeof(ctx->file_ctx.buf));
     if (n < 0) {
-        /* Try hex as fallback */
-        n = hex_to_bytes(data_str, ctx->file_ctx.buf, sizeof(ctx->file_ctx.buf));
-        if (n < 0) {
-            fl_response(false, "Invalid data encoding");
-            return;
-        }
+        fl_response(false, "Invalid data encoding");
+        return;
     }
 
     /* Verify CRC if provided */

@@ -718,8 +718,8 @@ void test_loader_cmd_upload_hex_data(void) {
 
     mock_output_reset();
 
-    /* Upload hex data (01020304) */
-    const char* argv[] = {"fl", "--cmd", "upload", "--addr", "0", "--data", "01020304"};
+    /* Upload base64 data (AQIDBA== = 01 02 03 04) */
+    const char* argv[] = {"fl", "--cmd", "upload", "--addr", "0", "--data", "AQIDBA=="};
     int result = fl_exec_cmd(&test_ctx, 7, argv);
 
     TEST_ASSERT_EQUAL(0, result);
@@ -854,8 +854,8 @@ void test_loader_cmd_fwrite_hex_data(void) {
 
     mock_output_reset();
 
-    /* Write hex data (48656C6C6F = "Hello") */
-    const char* argv[] = {"fl", "--cmd", "fwrite", "--data", "48656C6C6F"};
+    /* Write base64 data (SGVsbG8= = "Hello") */
+    const char* argv[] = {"fl", "--cmd", "fwrite", "--data", "SGVsbG8="};
     fl_exec_cmd(&test_ctx, 5, argv);
 
     TEST_ASSERT(mock_output_contains("FWRITE") || mock_output_contains("FLOK"));
