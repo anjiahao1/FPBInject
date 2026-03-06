@@ -77,6 +77,12 @@ const TUTORIAL_STEPS = [
     id: 'hello_verify',
     sidebar: null,
     highlight: '#panelContainer',
+    gate: () => {
+      const rawBtn = document.getElementById('tabBtnRaw');
+      return rawBtn && rawBtn.classList.contains('active');
+    },
+    gateHint: 'tutorial.gate_hello_verify',
+    gateOk: 'tutorial.gate_hello_verify_ok',
   },
   {
     id: 'hello_unpatch',

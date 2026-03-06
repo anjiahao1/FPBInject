@@ -477,6 +477,9 @@ window.i18nResources['zh-TW'] = {
       gate_hello_inject: '⏳ 請選擇槽位後點擊「注入」按鈕。',
       gate_hello_inject_ok: '✅ 注入成功！',
 
+      gate_hello_verify: '⏳ 請切換到「串口」終端標籤頁。',
+      gate_hello_verify_ok: '✅ 已切換到串口終端！',
+
       hello_verify_title: '驗證注入效果',
       hello_verify_desc: '在串口終端傳送 hello 命令，驗證注入是否生效。',
       hello_verify_send_cmd: '傳送命令',

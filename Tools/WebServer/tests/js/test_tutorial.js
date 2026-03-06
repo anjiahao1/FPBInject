@@ -666,10 +666,26 @@ module.exports = function (w) {
       assertEqual(count, 2);
     });
 
-    it('hello_verify step has no gate (next button enabled)', () => {
+    it('hello_verify step has gate requiring serial tab', () => {
       resetMocks();
       clearTutorialStorage();
       setupTutorialDOM();
+      // tabBtnRaw exists but is NOT active
+      const rawBtn = createMockElement('tabBtnRaw');
+      mockElements['tabBtnRaw'] = rawBtn;
+      w.startTutorial();
+      w.tutorialGoTo(10); // hello_verify
+      const nextBtn = getElement('tutorialNextBtn');
+      assertTrue(nextBtn.disabled);
+    });
+
+    it('hello_verify gate passes when serial tab is active', () => {
+      resetMocks();
+      clearTutorialStorage();
+      setupTutorialDOM();
+      const rawBtn = createMockElement('tabBtnRaw');
+      rawBtn.classList.add('active');
+      mockElements['tabBtnRaw'] = rawBtn;
       w.startTutorial();
       w.tutorialGoTo(10); // hello_verify
       const nextBtn = getElement('tutorialNextBtn');

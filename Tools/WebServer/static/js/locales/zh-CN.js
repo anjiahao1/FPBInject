@@ -475,6 +475,9 @@ window.i18nResources['zh-CN'] = {
       gate_hello_inject: '⏳ 请选择槽位后点击「注入」按钮。',
       gate_hello_inject_ok: '✅ 注入成功！',
 
+      gate_hello_verify: '⏳ 请切换到「串口」终端标签页。',
+      gate_hello_verify_ok: '✅ 已切换到串口终端！',
+
       hello_verify_title: '验证注入效果',
       hello_verify_desc: '在串口终端发送 hello 命令，验证注入是否生效。',
       hello_verify_send_cmd: '发送命令',

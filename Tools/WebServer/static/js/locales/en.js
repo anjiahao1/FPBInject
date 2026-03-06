@@ -519,6 +519,10 @@ window.i18nResources['en'] = {
       gate_hello_inject: '⏳ Please select a slot and click the inject button.',
       gate_hello_inject_ok: '✅ Injection successful!',
 
+      gate_hello_verify:
+        '⏳ Please switch to the Serial terminal tab to continue.',
+      gate_hello_verify_ok: '✅ Serial terminal active!',
+
       hello_verify_title: 'Verify Injection',
       hello_verify_desc:
         'Send the hello command in the serial terminal to verify the injection effect.',
