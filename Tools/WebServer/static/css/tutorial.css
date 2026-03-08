@@ -330,12 +330,7 @@
 
 .tutorial-gate-banner .codicon {
   font-size: 14px;
-  animation: tutorial-banner-arrow 0.8s ease-in-out infinite;
-}
-
-@keyframes tutorial-banner-arrow {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(-4px); }
+  transition: transform 0.15s ease-out;
 }
 
 @keyframes tutorial-field-pulse {

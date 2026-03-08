@@ -867,4 +867,77 @@ module.exports = function (w) {
       assertTrue(modal.style.left !== '');
     });
   });
+
+  /* ===========================
+     GATE BANNER ARROW
+     =========================== */
+
+  describe('Tutorial - Gate Banner Arrow', () => {
+    it('updateGateBannerArrow is a function', () => {
+      assertTrue(typeof w.updateGateBannerArrow === 'function');
+    });
+
+    it('updateGateBannerArrow does nothing without arrow element', () => {
+      resetMocks();
+      setupTutorialDOM();
+      // No arrow element exists
+      w.updateGateBannerArrow();
+      // Should not throw
+      assertTrue(true);
+    });
+
+    it('updateGateBannerArrow sets default rotation when no target', () => {
+      resetMocks();
+      setupTutorialDOM();
+      // Create arrow element
+      const arrow = createMockElement('gate-arrow');
+      arrow.classList.add('tutorial-gate-arrow');
+      mockElements['tutorial-gate-arrow'] = arrow;
+      // Go to welcome step (no sidebar/highlight)
+      w.startTutorial();
+      w.tutorialGoTo(0);
+      w.updateGateBannerArrow();
+      // Arrow should have transform style (default 180deg)
+      assertTrue(arrow.style.transform.includes('180'));
+    });
+
+    it('updateGateBannerArrow calculates angle to target', () => {
+      resetMocks();
+      setupTutorialDOM();
+      // Create arrow element with getBoundingClientRect
+      const arrow = createMockElement('gate-arrow');
+      arrow.classList.add('tutorial-gate-arrow');
+      arrow.getBoundingClientRect = () => ({
+        left: 500,
+        top: 100,
+        width: 20,
+        height: 20,
+      });
+      mockElements['tutorial-gate-arrow'] = arrow;
+      // Create target element
+      const target = createMockElement('details-connection');
+      target.getBoundingClientRect = () => ({
+        left: 100,
+        top: 100,
+        width: 200,
+        height: 100,
+      });
+      mockElements['details-connection'] = target;
+      // Go to connection step
+      w.startTutorial();
+      w.tutorialGoTo(2); // connection step
+      w.updateGateBannerArrow();
+      // Arrow should have transform with calculated angle
+      assertTrue(arrow.style.transform.includes('rotate'));
+    });
+
+    it('renderGateBanner includes arrow element', () => {
+      resetMocks();
+      setupTutorialDOM();
+      w.startTutorial();
+      w.tutorialGoTo(2); // connection step (has gate)
+      const body = getElement('tutorialBody');
+      assertTrue(body.innerHTML.includes('tutorial-gate-arrow'));
+    });
+  });
 };

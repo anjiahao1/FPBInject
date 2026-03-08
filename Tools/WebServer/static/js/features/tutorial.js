@@ -353,6 +353,7 @@ function renderTutorialStep() {
     setTimeout(() => {
       highlightElement(`#${step.sidebar}`);
       positionModalNearTarget(`#${step.sidebar}`);
+      updateGateBannerArrow();
       // Apply per-field visual guides for config gate
       if (step.id === 'config') {
         setTimeout(() => highlightConfigGateFields(), 100);
@@ -362,9 +363,11 @@ function renderTutorialStep() {
     setTimeout(() => {
       highlightNonSidebarElement(step.highlight);
       positionModalNearTarget(step.highlight);
+      updateGateBannerArrow();
     }, 300);
   } else {
     positionModalNearTarget(null);
+    setTimeout(() => updateGateBannerArrow(), 50);
   }
 
   renderTutorialProgress();
@@ -507,7 +510,46 @@ function renderGateBanner(step) {
   if (!gated || passed) return '';
 
   const hintText = t(step.gateHint || 'tutorial.gate_waiting', 'Complete the action to continue');
-  return `<div class="tutorial-gate-banner"><i class="codicon codicon-arrow-left"></i><span>${hintText}</span></div>`;
+  return `<div class="tutorial-gate-banner"><i class="codicon codicon-arrow-right tutorial-gate-arrow"></i><span>${hintText}</span></div>`;
+}
+
+/**
+ * Update the gate banner arrow to point towards the target element.
+ * Called on render, drag, and resize.
+ */
+function updateGateBannerArrow() {
+  const arrow = document.querySelector('.tutorial-gate-arrow');
+  if (!arrow) return;
+
+  const step = TUTORIAL_STEPS[tutorialStep];
+  if (!step) return;
+
+  // Get target element
+  const targetSelector = step.sidebar ? `#${step.sidebar}` : step.highlight;
+  if (!targetSelector) {
+    arrow.style.transform = 'rotate(180deg)'; // Default: point left
+    return;
+  }
+
+  const target = document.querySelector(targetSelector);
+  if (!target) {
+    arrow.style.transform = 'rotate(180deg)';
+    return;
+  }
+
+  // Get positions (arrow center -> target center)
+  const arrowRect = arrow.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+
+  const arrowX = arrowRect.left + arrowRect.width / 2;
+  const arrowY = arrowRect.top + arrowRect.height / 2;
+  const targetX = targetRect.left + targetRect.width / 2;
+  const targetY = targetRect.top + targetRect.height / 2;
+
+  // Calculate angle in degrees
+  const angle = Math.atan2(targetY - arrowY, targetX - arrowX) * (180 / Math.PI);
+
+  arrow.style.transform = `rotate(${angle}deg)`;
 }
 
 function renderTutorialProgress() {
@@ -969,6 +1011,9 @@ function initTutorialDrag() {
 
     modal.style.left = x + 'px';
     modal.style.top = y + 'px';
+
+    // Update arrow direction while dragging
+    updateGateBannerArrow();
   });
 
   document.addEventListener('mouseup', () => {
@@ -1085,6 +1130,7 @@ window.finishTutorial = finishTutorial;
 window.renderTutorialStep = renderTutorialStep;
 window.renderGateStatus = renderGateStatus;
 window.renderGateBanner = renderGateBanner;
+window.updateGateBannerArrow = updateGateBannerArrow;
 window.getStepGateStatus = getStepGateStatus;
 window.resetTutorialPosition = resetTutorialPosition;
 window.positionModalNearTarget = positionModalNearTarget;
