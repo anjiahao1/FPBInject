@@ -1500,7 +1500,7 @@ input[type="checkbox"] {
 .watch-panel {
   overflow-y: auto;
   min-height: 40px;
-  max-height: 300px;
+  flex: 1;
 }
 
 .watch-empty {
@@ -1661,7 +1661,6 @@ input[type="checkbox"] {
   font-size: 12px;
   font-family: "Consolas", "Courier New", monospace;
   cursor: default;
-  user-select: none;
   min-height: 22px;
 }
 
@@ -1713,6 +1712,24 @@ input[type="checkbox"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: text;
+}
+
+.watch-node-name.editable:hover {
+  text-decoration: underline;
+  cursor: text;
+}
+
+.watch-node-name-input {
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-focusBorder);
+  color: var(--vscode-input-foreground);
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 12px;
+  padding: 0 4px;
+  margin-right: 8px;
+  max-width: 200px;
+  outline: none;
 }
 
 /* Node type */

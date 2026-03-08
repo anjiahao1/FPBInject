@@ -258,8 +258,12 @@ function _buildWatchTreeNode(id, expr, name, data, depth = 0) {
     html += `<span class="watch-expand-icon leaf"></span>`;
   }
 
-  // Name/Expression
-  html += `<span class="watch-node-name">${escapeHtml(name || expr)}</span>`;
+  // Name/Expression (editable for root nodes)
+  if (depth === 0) {
+    html += `<span class="watch-node-name editable" ondblclick="watchStartEditExpr(${id}, '${expr.replace(/'/g, "\\'")}')">${escapeHtml(name || expr)}</span>`;
+  } else {
+    html += `<span class="watch-node-name">${escapeHtml(name || expr)}</span>`;
+  }
 
   // Type (dimmed)
   if (typeName) {
@@ -510,6 +514,87 @@ async function watchRemoveEntry(id) {
 }
 
 /* ===========================
+   EXPRESSION EDITING
+   =========================== */
+
+function watchStartEditExpr(id, currentExpr) {
+  const node = document.querySelector(
+    `.watch-tree-node[data-watch-id="${id}"][data-depth="0"]`,
+  );
+  if (!node) return;
+
+  const nameSpan = node.querySelector('.watch-node-name');
+  if (!nameSpan) return;
+
+  // Create input element
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'watch-node-name-input';
+  input.value = currentExpr;
+
+  // Handle commit
+  const commitEdit = async () => {
+    const newExpr = input.value.trim();
+    if (newExpr && newExpr !== currentExpr) {
+      // Remove old, add new
+      await watchRemove(id);
+      _watchDataCache.delete(id);
+      _watchExpandedState.delete(String(id));
+
+      const addResult = await watchAdd(newExpr);
+      if (addResult.success) {
+        const data = await watchEvaluate(newExpr, true);
+        _watchDataCache.set(addResult.id, { expr: newExpr, data });
+
+        // Replace node with new one
+        const html = _buildWatchTreeNode(
+          addResult.id,
+          newExpr,
+          newExpr,
+          data,
+          0,
+        );
+        const childrenContainer = node.parentElement.querySelector(
+          `.watch-tree-children[data-parent="${id}"]`,
+        );
+        if (childrenContainer) childrenContainer.remove();
+        node.outerHTML = html;
+        _saveWatchesToStorage();
+      } else {
+        // Restore original
+        nameSpan.textContent = currentExpr;
+        input.replaceWith(nameSpan);
+      }
+    } else {
+      // Restore original
+      input.replaceWith(nameSpan);
+    }
+  };
+
+  // Handle cancel
+  const cancelEdit = () => {
+    input.replaceWith(nameSpan);
+  };
+
+  input.addEventListener('blur', commitEdit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      input.blur();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      input.removeEventListener('blur', commitEdit);
+      cancelEdit();
+    }
+  });
+
+  // Replace span with input
+  nameSpan.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+/* ===========================
    PANEL INTERACTION
    =========================== */
 
@@ -656,6 +741,7 @@ window.watchGetAutoRefreshInterval = watchGetAutoRefreshInterval;
 window.watchCollapseAll = watchCollapseAll;
 window.watchExpandAll = watchExpandAll;
 window.watchRestoreFromStorage = watchRestoreFromStorage;
+window.watchStartEditExpr = watchStartEditExpr;
 window._saveWatchesToStorage = _saveWatchesToStorage;
 window._loadWatchesFromStorage = _loadWatchesFromStorage;
 window._renderWatchValue = _renderWatchValue;
