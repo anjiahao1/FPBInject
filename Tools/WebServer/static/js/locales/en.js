@@ -552,60 +552,60 @@ window.i18nResources['en'] = {
       // Hello inject steps
       hello_search_title: 'Search Target Function',
       hello_search_desc:
-        "Let's try a real injection! Search for the hello function in the Symbols panel.",
+        'Experience a real injection workflow.',
       hello_search_input: 'Search Symbol',
       hello_search_input_desc:
-        'Type <code>fl_hello</code> in the search box and press Enter.',
+        'Search box: <code>fl_hello</code> → Enter',
       hello_search_result: 'View Results',
       hello_search_result_desc:
-        'The list shows the function address and name from your ELF firmware.',
+        'List shows function address and name',
       hello_search_dblclick: 'Double-Click to Patch',
       hello_search_dblclick_desc:
-        'Double-click the symbol to auto-generate a patch template in the editor.',
+        'Double-click symbol → auto-generate patch template',
       gate_hello_search:
-        '⏳ Please search for <code>fl_hello</code> and double-click to create a patch tab.',
+        'Search <code>fl_hello</code> → double-click to create patch',
       gate_hello_search_ok: '✅ Patch tab created!',
 
       hello_inject_title: 'Edit & Inject Patch',
       hello_inject_desc:
-        'The generated patch template can be injected directly. Select a slot and click inject.',
+        'Modify the code and click inject.',
       hello_inject_edit: 'Edit Code',
       hello_inject_edit_desc:
-        'Change the <code>fl_println</code> string to your own message.',
+        'Change the <code>fl_println</code> string',
       hello_inject_slot: 'Select Slot',
       hello_inject_slot_desc:
-        'Make sure an available FPB slot is selected in the toolbar.',
+        'Select an available slot in toolbar',
       hello_inject_run: 'Click Inject',
       hello_inject_run_desc:
-        'Click the inject button in the toolbar and wait for completion.',
-      gate_hello_inject: '⏳ Please select a slot and click the inject button.',
+        'Toolbar → Inject button',
+      gate_hello_inject: 'Select slot → click Inject',
       gate_hello_inject_ok: '✅ Injection successful!',
 
       gate_hello_verify:
-        '⏳ Please switch to the Serial terminal tab to continue.',
+        'Switch to Serial terminal tab',
       gate_hello_verify_ok: '✅ Serial terminal active!',
 
       hello_verify_title: 'Verify Injection',
       hello_verify_desc:
-        'Send the hello command in the serial terminal to verify the injection effect.',
+        'Send command to verify injection effect.',
       hello_verify_send_cmd: 'Send Command',
       hello_verify_send_cmd_desc:
-        'Type <code>fl -c hello</code> in the serial terminal and press Enter.',
+        'Serial terminal: <code>fl -c hello</code> → Enter',
       hello_verify_check_output: 'Check Output',
       hello_verify_check_output_desc:
-        'The output should show the injected message instead of the original one.',
+        'Output should show injected message',
 
       hello_unpatch_title: 'Unpatch',
       hello_unpatch_desc:
-        'Remove the injection and verify the original function is restored.',
+        'Remove injection and restore original function.',
       hello_unpatch_click: 'Click ✕ to Unpatch',
       hello_unpatch_click_desc:
-        'In the Device Info panel, click the ✕ button on the occupied slot to remove the injection.',
+        'Device panel → click slot ✕ button',
       hello_unpatch_verify: 'Verify Restore',
       hello_unpatch_verify_desc:
-        'Send <code>fl -c hello</code> again — the output should revert to the original message.',
+        'Send <code>fl -c hello</code> again to verify',
       gate_hello_unpatch:
-        '⏳ Please click ✕ on the occupied slot to remove the injection.',
+        'Click slot ✕ button to unpatch',
       gate_hello_unpatch_ok: '✅ Unpatch complete!',
       hello_unpatch_hint:
         'This is the complete FPB runtime code injection workflow — replace any function without reflashing!',

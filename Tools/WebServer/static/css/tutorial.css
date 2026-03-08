@@ -314,6 +314,30 @@
   position: relative;
 }
 
+/* --- Gate banner (prominent action hint at top) --- */
+.tutorial-gate-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  margin: -20px -20px 16px -20px;
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.2), rgba(255, 152, 0, 0.15));
+  border-bottom: 1px solid rgba(255, 193, 7, 0.3);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.tutorial-gate-banner .codicon {
+  font-size: 14px;
+  animation: tutorial-banner-arrow 1s ease-in-out infinite;
+}
+
+@keyframes tutorial-banner-arrow {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(4px); }
+}
+
 @keyframes tutorial-field-pulse {
   0%,
   100% {

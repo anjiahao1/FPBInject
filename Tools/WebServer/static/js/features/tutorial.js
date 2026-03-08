@@ -335,7 +335,8 @@ function renderTutorialStep() {
   const renderer = stepRenderers[step.id];
   if (renderer) {
     body.style.animation = 'none';
-    body.innerHTML = renderer();
+    const gateBanner = renderGateBanner(step);
+    body.innerHTML = gateBanner + renderer();
     void body.offsetHeight;
     body.style.animation = '';
   }
@@ -498,6 +499,18 @@ function renderGateStatus(step) {
     : t(step.gateHint || 'tutorial.gate_waiting', '⏳ Waiting...');
 
   return `<div class="tutorial-connect-status ${statusClass}" style="display: block;">${statusText}</div>`;
+}
+
+/**
+ * Render a prominent gate banner at the top of the modal when gate is not passed.
+ * This makes the required action immediately visible to the user.
+ */
+function renderGateBanner(step) {
+  const { gated, passed } = getStepGateStatus(step);
+  if (!gated || passed) return '';
+
+  const hintText = t(step.gateHint || 'tutorial.gate_waiting', 'Complete the action to continue');
+  return `<div class="tutorial-gate-banner"><i class="codicon codicon-arrow-right"></i><span>${hintText}</span></div>`;
 }
 
 function renderTutorialProgress() {
@@ -1074,6 +1087,7 @@ window.tutorialGoTo = tutorialGoTo;
 window.finishTutorial = finishTutorial;
 window.renderTutorialStep = renderTutorialStep;
 window.renderGateStatus = renderGateStatus;
+window.renderGateBanner = renderGateBanner;
 window.getStepGateStatus = getStepGateStatus;
 window.resetTutorialPosition = resetTutorialPosition;
 window.positionModalNearTarget = positionModalNearTarget;
