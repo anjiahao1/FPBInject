@@ -513,4 +513,110 @@ module.exports = function (w) {
     it('is async function', () =>
       assertTrue(w.watchAddFromInput.constructor.name === 'AsyncFunction'));
   });
+
+  describe('Watch LocalStorage Persistence', () => {
+    it('_saveWatchesToStorage is a function', () =>
+      assertTrue(typeof w._saveWatchesToStorage === 'function'));
+
+    it('_loadWatchesFromStorage is a function', () =>
+      assertTrue(typeof w._loadWatchesFromStorage === 'function'));
+
+    it('watchRestoreFromStorage is a function', () =>
+      assertTrue(typeof w.watchRestoreFromStorage === 'function'));
+
+    it('watchRestoreFromStorage is async function', () =>
+      assertTrue(w.watchRestoreFromStorage.constructor.name === 'AsyncFunction'));
+
+    it('_loadWatchesFromStorage returns empty array when no data', () => {
+      browserGlobals.localStorage.removeItem('fpbinject_watch_expressions');
+      const result = w._loadWatchesFromStorage();
+      assertTrue(Array.isArray(result));
+      assertEqual(result.length, 0);
+    });
+
+    it('_loadWatchesFromStorage returns stored expressions', () => {
+      browserGlobals.localStorage.setItem('fpbinject_watch_expressions', JSON.stringify(['expr1', 'expr2']));
+      const result = w._loadWatchesFromStorage();
+      assertEqual(result.length, 2);
+      assertEqual(result[0], 'expr1');
+      assertEqual(result[1], 'expr2');
+      browserGlobals.localStorage.removeItem('fpbinject_watch_expressions');
+    });
+
+    it('_loadWatchesFromStorage handles invalid JSON gracefully', () => {
+      browserGlobals.localStorage.setItem('fpbinject_watch_expressions', 'invalid json');
+      const result = w._loadWatchesFromStorage();
+      assertTrue(Array.isArray(result));
+      assertEqual(result.length, 0);
+      browserGlobals.localStorage.removeItem('fpbinject_watch_expressions');
+    });
+
+    it('_saveWatchesToStorage saves expressions to localStorage', () => {
+      browserGlobals.localStorage.removeItem('fpbinject_watch_expressions');
+      w._watchDataCache.set(1, { expr: 'test_expr_1', data: {} });
+      w._watchDataCache.set(2, { expr: 'test_expr_2', data: {} });
+      // Mock document.querySelectorAll to return nodes
+      const origQuerySelectorAll = browserGlobals.document.querySelectorAll;
+      browserGlobals.document.querySelectorAll = (selector) => {
+        if (selector === '.watch-tree-node[data-depth="0"]') {
+          return [
+            { getAttribute: (name) => name === 'data-watch-id' ? '1' : null },
+            { getAttribute: (name) => name === 'data-watch-id' ? '2' : null },
+          ];
+        }
+        return origQuerySelectorAll.call(browserGlobals.document, selector);
+      };
+      w._saveWatchesToStorage();
+      const stored = browserGlobals.localStorage.getItem('fpbinject_watch_expressions');
+      assertTrue(stored !== null);
+      const parsed = JSON.parse(stored);
+      assertEqual(parsed.length, 2);
+      // Cleanup
+      w._watchDataCache.delete(1);
+      w._watchDataCache.delete(2);
+      browserGlobals.document.querySelectorAll = origQuerySelectorAll;
+      browserGlobals.localStorage.removeItem('fpbinject_watch_expressions');
+    });
+
+    it('watchRestoreFromStorage restores expressions without evaluating', async () => {
+      browserGlobals.localStorage.setItem('fpbinject_watch_expressions', JSON.stringify(['restored_expr']));
+      setFetchResponse('/api/watch_expr/add', { success: true, id: 100 });
+      const panel = browserGlobals.document.getElementById('watchPanel');
+      // Add insertAdjacentHTML mock
+      panel.insertAdjacentHTML = (position, html) => {
+        panel.innerHTML += html;
+      };
+      const emptyDiv = browserGlobals.document.createElement('div');
+      emptyDiv.className = 'watch-empty';
+      emptyDiv.textContent = 'No watches';
+      panel.innerHTML = '';
+      panel.appendChild(emptyDiv);
+      // Mock querySelector for empty placeholder
+      const origQuerySelector = panel.querySelector;
+      panel.querySelector = (selector) => {
+        if (selector === '.watch-empty') return emptyDiv;
+        return null;
+      };
+      await w.watchRestoreFromStorage();
+      // Check that expression was added to cache without data
+      const cached = w._watchDataCache.get(100);
+      assertTrue(cached !== undefined);
+      assertEqual(cached.expr, 'restored_expr');
+      assertEqual(cached.data, null);
+      // Cleanup
+      w._watchDataCache.delete(100);
+      panel.innerHTML = '';
+      panel.querySelector = origQuerySelector;
+      browserGlobals.localStorage.removeItem('fpbinject_watch_expressions');
+    });
+
+    it('watchRestoreFromStorage does nothing when no stored expressions', async () => {
+      browserGlobals.localStorage.removeItem('fpbinject_watch_expressions');
+      const panel = browserGlobals.document.getElementById('watchPanel');
+      panel.innerHTML = '<div class="watch-empty">No watches</div>';
+      await w.watchRestoreFromStorage();
+      // Panel should remain unchanged
+      assertTrue(panel.innerHTML.includes('watch-empty'));
+    });
+  });
 };

@@ -12,6 +12,63 @@ const _watchExpandedState = new Map(); // Track expanded/collapsed state
 let _watchAutoRefreshInterval = 0;
 let _watchAutoRefreshTimer = null;
 
+const WATCH_STORAGE_KEY = 'fpbinject_watch_expressions';
+
+/* ===========================
+   LOCAL STORAGE PERSISTENCE
+   =========================== */
+
+function _saveWatchesToStorage() {
+  try {
+    const watches = [];
+    const nodes = document.querySelectorAll('.watch-tree-node[data-depth="0"]');
+    nodes.forEach(node => {
+      const id = node.getAttribute('data-watch-id');
+      const cached = _watchDataCache.get(parseInt(id));
+      if (cached && cached.expr) {
+        watches.push(cached.expr);
+      }
+    });
+    localStorage.setItem(WATCH_STORAGE_KEY, JSON.stringify(watches));
+  } catch (e) {
+    console.warn('Failed to save watch expressions:', e);
+  }
+}
+
+function _loadWatchesFromStorage() {
+  try {
+    const stored = localStorage.getItem(WATCH_STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.warn('Failed to load watch expressions:', e);
+  }
+  return [];
+}
+
+async function watchRestoreFromStorage() {
+  const expressions = _loadWatchesFromStorage();
+  if (expressions.length === 0) return;
+
+  const panel = document.getElementById('watchPanel');
+  if (!panel) return;
+
+  // Clear empty placeholder
+  const empty = panel.querySelector('.watch-empty');
+  if (empty) empty.remove();
+
+  for (const expr of expressions) {
+    const addResult = await watchAdd(expr);
+    if (addResult.success) {
+      // Don't evaluate on startup - just show the expression with no data
+      _watchDataCache.set(addResult.id, { expr, data: null });
+      const html = _buildWatchTreeNode(addResult.id, expr, expr, null, 0);
+      panel.insertAdjacentHTML('beforeend', html);
+    }
+  }
+}
+
 /* ===========================
    WATCH EXPRESSION API
    =========================== */
@@ -414,6 +471,9 @@ async function watchRemoveEntry(id) {
     clearInterval(_watchAutoTimers.get(id));
     _watchAutoTimers.delete(id);
   }
+
+  // Save to localStorage
+  _saveWatchesToStorage();
 }
 
 /* ===========================
@@ -448,6 +508,9 @@ async function watchAddFromInput() {
 
   const html = _buildWatchTreeNode(addResult.id, expr, expr, data, 0);
   panel.insertAdjacentHTML('beforeend', html);
+
+  // Save to localStorage
+  _saveWatchesToStorage();
 }
 
 async function watchRefreshAll() {
@@ -478,6 +541,9 @@ async function watchClearAll() {
     clearInterval(timerId);
   }
   _watchAutoTimers.clear();
+
+  // Clear localStorage
+  _saveWatchesToStorage();
 }
 
 /* ===========================
@@ -556,6 +622,9 @@ window.watchSetAutoRefresh = watchSetAutoRefresh;
 window.watchGetAutoRefreshInterval = watchGetAutoRefreshInterval;
 window.watchCollapseAll = watchCollapseAll;
 window.watchExpandAll = watchExpandAll;
+window.watchRestoreFromStorage = watchRestoreFromStorage;
+window._saveWatchesToStorage = _saveWatchesToStorage;
+window._loadWatchesFromStorage = _loadWatchesFromStorage;
 window._renderWatchValue = _renderWatchValue;
 window._renderWatchStructTable = _renderWatchStructTable;
 window._buildWatchTreeNode = _buildWatchTreeNode;

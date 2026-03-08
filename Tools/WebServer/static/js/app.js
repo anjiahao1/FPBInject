@@ -43,4 +43,8 @@ document.addEventListener('DOMContentLoaded', () => {
   setupAutoSave();
   setupSidebarStateListeners();
   startBackendHealthCheck();
+  // Restore watch expressions from localStorage (without auto-refresh)
+  if (typeof watchRestoreFromStorage === 'function') {
+    watchRestoreFromStorage();
+  }
 });
