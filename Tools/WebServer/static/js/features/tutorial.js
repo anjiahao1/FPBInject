@@ -491,14 +491,11 @@ function clearConfigGateHighlights() {
 
 function renderGateStatus(step) {
   const { gated, passed } = getStepGateStatus(step);
-  if (!gated) return '';
+  if (!gated || !passed) return '';
 
-  const statusClass = passed ? 'success' : '';
-  const statusText = passed
-    ? t(step.gateOk || 'tutorial.gate_ok', '✅ Ready!')
-    : t(step.gateHint || 'tutorial.gate_waiting', '⏳ Waiting...');
-
-  return `<div class="tutorial-connect-status ${statusClass}" style="display: block;">${statusText}</div>`;
+  // Only show success state - waiting state is handled by the banner
+  const statusText = t(step.gateOk || 'tutorial.gate_ok', '✅ Ready!');
+  return `<div class="tutorial-connect-status success" style="display: block;">${statusText}</div>`;
 }
 
 /**
@@ -510,7 +507,7 @@ function renderGateBanner(step) {
   if (!gated || passed) return '';
 
   const hintText = t(step.gateHint || 'tutorial.gate_waiting', 'Complete the action to continue');
-  return `<div class="tutorial-gate-banner"><i class="codicon codicon-arrow-right"></i><span>${hintText}</span></div>`;
+  return `<div class="tutorial-gate-banner"><i class="codicon codicon-arrow-left"></i><span>${hintText}</span></div>`;
 }
 
 function renderTutorialProgress() {
