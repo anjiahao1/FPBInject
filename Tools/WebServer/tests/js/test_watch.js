@@ -173,9 +173,9 @@ module.exports = function (w) {
           { name: 'y', type_name: 'uint32_t', offset: 4, size: 4 },
         ],
       });
-      assertContains(html, 'watch-struct-table');
-      assertContains(html, 'x');
-      assertContains(html, 'y');
+      // Tree view now shows summary instead of inline table
+      assertContains(html, 'watch-type-summary');
+      assertContains(html, '2 fields');
     });
 
     it('renders hex for unknown type', () => {
@@ -227,7 +227,8 @@ module.exports = function (w) {
         is_aggregate: false,
       });
       assertContains(html, 'g_counter');
-      assertContains(html, 'watch-entry');
+      // Tree view uses watch-tree-node instead of watch-entry
+      assertContains(html, 'watch-tree-node');
       assertContains(html, 'data-watch-id="1"');
     });
 
@@ -267,5 +268,249 @@ module.exports = function (w) {
       await w.watchClearAll();
       assertTrue(w._watchAutoTimers.size === 0);
     });
+  });
+
+  describe('Tree View Exports', () => {
+    it('watchRenderAll is a function', () =>
+      assertTrue(typeof w.watchRenderAll === 'function'));
+    it('watchToggleExpand is a function', () =>
+      assertTrue(typeof w.watchToggleExpand === 'function'));
+    it('watchDerefField is a function', () =>
+      assertTrue(typeof w.watchDerefField === 'function'));
+    it('watchSetAutoRefresh is a function', () =>
+      assertTrue(typeof w.watchSetAutoRefresh === 'function'));
+    it('watchCollapseAll is a function', () =>
+      assertTrue(typeof w.watchCollapseAll === 'function'));
+    it('watchExpandAll is a function', () =>
+      assertTrue(typeof w.watchExpandAll === 'function'));
+    it('_buildWatchTreeNode is a function', () =>
+      assertTrue(typeof w._buildWatchTreeNode === 'function'));
+    it('_watchExpandedState is a Map', () =>
+      assertTrue(w._watchExpandedState instanceof Map));
+    it('_watchDataCache is a Map', () =>
+      assertTrue(w._watchDataCache instanceof Map));
+  });
+
+  describe('watchToggleExpand Function', () => {
+    it('toggles expanded state for a node id', () => {
+      const nodeId = 'test_node_123';
+      w._watchExpandedState.delete(nodeId);
+      // First toggle: undefined -> false (collapsed)
+      w.watchToggleExpand(nodeId);
+      assertEqual(w._watchExpandedState.get(nodeId), false);
+      // Second toggle: false -> true (expanded)
+      w.watchToggleExpand(nodeId);
+      assertEqual(w._watchExpandedState.get(nodeId), true);
+      w._watchExpandedState.delete(nodeId);
+    });
+  });
+
+  describe('watchCollapseAll Function', () => {
+    it('sets all expanded states to false', () => {
+      w._watchExpandedState.set('a', true);
+      w._watchExpandedState.set('b', true);
+      w.watchCollapseAll();
+      assertEqual(w._watchExpandedState.get('a'), false);
+      assertEqual(w._watchExpandedState.get('b'), false);
+      w._watchExpandedState.clear();
+    });
+  });
+
+  describe('watchExpandAll Function', () => {
+    it('is a function that can be called', () => {
+      assertTrue(typeof w.watchExpandAll === 'function');
+      // Just verify it doesn't throw
+      w.watchExpandAll();
+    });
+  });
+
+  describe('watchSetAutoRefresh Function', () => {
+    it('sets global auto refresh interval', () => {
+      w.watchSetAutoRefresh(1000);
+      assertEqual(w.watchGetAutoRefreshInterval(), 1000);
+      // Clean up
+      w.watchSetAutoRefresh(0);
+    });
+
+    it('clears timer when interval is 0', () => {
+      w.watchSetAutoRefresh(1000);
+      assertTrue(w.watchGetAutoRefreshInterval() === 1000);
+      w.watchSetAutoRefresh(0);
+      assertEqual(w.watchGetAutoRefreshInterval(), 0);
+    });
+  });
+
+  describe('_buildWatchTreeNode Function', () => {
+    it('builds node for scalar value', () => {
+      const html = w._buildWatchTreeNode(1, 'g_counter', 'counter', {
+        success: true,
+        hex_data: '2A000000',
+        size: 4,
+        type_name: 'uint32_t',
+        is_aggregate: false,
+      }, 0);
+      assertContains(html, 'watch-tree-node');
+      assertContains(html, 'counter');
+      assertContains(html, 'watch-node-type');
+    });
+
+    it('builds expandable node for struct', () => {
+      const html = w._buildWatchTreeNode(2, 'g_point', 'point', {
+        success: true,
+        hex_data: '0100000002000000',
+        size: 8,
+        type_name: 'struct point',
+        is_aggregate: true,
+        struct_layout: [
+          { name: 'x', type_name: 'uint32_t', offset: 0, size: 4 },
+          { name: 'y', type_name: 'uint32_t', offset: 4, size: 4 },
+        ],
+      }, 0);
+      assertContains(html, 'watch-tree-node');
+      assertContains(html, 'watch-expand-icon');
+    });
+
+    it('applies depth via CSS variable', () => {
+      const html = w._buildWatchTreeNode(3, 'a.b.c', 'nested', {
+        success: true,
+        hex_data: '01',
+        size: 1,
+        type_name: 'uint8_t',
+        is_aggregate: false,
+      }, 2);
+      assertContains(html, '--depth: 2');
+    });
+
+    it('handles null data gracefully', () => {
+      const html = w._buildWatchTreeNode(4, 'expr', 'pending', null, 0);
+      assertContains(html, 'watch-tree-node');
+      assertContains(html, 'pending');
+    });
+
+    it('handles error data', () => {
+      const html = w._buildWatchTreeNode(5, 'bad_expr', 'bad', {
+        success: false,
+        error: 'Symbol not found',
+      }, 0);
+      assertContains(html, 'watch-tree-node');
+      assertContains(html, 'watch-error');
+    });
+  });
+
+  describe('watchDerefField Function', () => {
+    it('is async function', () =>
+      assertTrue(w.watchDerefField.constructor.name === 'AsyncFunction'));
+
+    it('calls deref API for pointer field', async () => {
+      setFetchResponse('/api/watch_expr/deref', {
+        success: true,
+        target_addr: '0x20004000',
+        target_type: 'uint8_t',
+        target_size: 1,
+        hex_data: 'FF',
+      });
+      setFetchResponse('/api/watch_expr/add', { success: true, id: 99 });
+      setFetchResponse('/api/watch_expr/list', { success: true, watches: [] });
+      const result = await w.watchDerefField('node1', '0x20003000', 'uint8_t *');
+      // Function doesn't return result directly, just verify no error
+      assertTrue(true);
+    });
+  });
+
+  describe('Value Change Detection', () => {
+    it('_watchDataCache stores previous values', () => {
+      w._watchDataCache.set('test_expr', { expr: 'test', data: { hex_data: 'AABBCCDD' } });
+      assertEqual(w._watchDataCache.get('test_expr').data.hex_data, 'AABBCCDD');
+      w._watchDataCache.delete('test_expr');
+    });
+  });
+
+  describe('renderWatchEntry uses tree node', () => {
+    it('renders tree node structure', () => {
+      const html = w.renderWatchEntry(1, 'g_counter', {
+        success: true,
+        hex_data: '2A000000',
+        size: 4,
+        type_name: 'uint32_t',
+        addr: '0x20001000',
+        is_aggregate: false,
+      });
+      assertContains(html, 'watch-tree-node');
+      assertContains(html, 'data-watch-id="1"');
+    });
+  });
+
+  describe('_renderWatchValue for aggregates', () => {
+    it('renders field count summary for struct', () => {
+      const html = w._renderWatchValue({
+        hex_data: '0100000002000000',
+        size: 8,
+        type_name: 'struct point',
+        is_aggregate: true,
+        struct_layout: [
+          { name: 'x', type_name: 'uint32_t', offset: 0, size: 4 },
+          { name: 'y', type_name: 'uint32_t', offset: 4, size: 4 },
+        ],
+      });
+      assertContains(html, 'watch-type-summary');
+      assertContains(html, '2 fields');
+    });
+  });
+
+  describe('watchGetAutoRefreshInterval Function', () => {
+    it('returns current interval', () => {
+      w.watchSetAutoRefresh(2000);
+      assertEqual(w.watchGetAutoRefreshInterval(), 2000);
+      w.watchSetAutoRefresh(0);
+    });
+
+    it('returns 0 when disabled', () => {
+      w.watchSetAutoRefresh(0);
+      assertEqual(w.watchGetAutoRefreshInterval(), 0);
+    });
+  });
+
+  describe('watchRenderAll Function', () => {
+    it('is async function', () =>
+      assertTrue(w.watchRenderAll.constructor.name === 'AsyncFunction'));
+  });
+
+  describe('watchRefreshOne Function', () => {
+    it('is async function', () =>
+      assertTrue(w.watchRefreshOne.constructor.name === 'AsyncFunction'));
+
+    it('evaluates and updates cache', async () => {
+      setFetchResponse('/api/watch_expr/evaluate', {
+        success: true,
+        hex_data: 'DEADBEEF',
+        size: 4,
+        type_name: 'uint32_t',
+        is_aggregate: false,
+      });
+      await w.watchRefreshOne(99, 'test_var');
+      const cached = w._watchDataCache.get(99);
+      assertTrue(cached !== undefined);
+      assertEqual(cached.expr, 'test_var');
+      w._watchDataCache.delete(99);
+    });
+  });
+
+  describe('watchRemoveEntry Function', () => {
+    it('is async function', () =>
+      assertTrue(w.watchRemoveEntry.constructor.name === 'AsyncFunction'));
+
+    it('removes from cache and timers', async () => {
+      w._watchDataCache.set(88, { expr: 'to_remove', data: {} });
+      w._watchAutoTimers.set(88, 12345);
+      setFetchResponse('/api/watch_expr/remove', { success: true });
+      await w.watchRemoveEntry(88);
+      assertTrue(!w._watchDataCache.has(88));
+      assertTrue(!w._watchAutoTimers.has(88));
+    });
+  });
+
+  describe('watchAddFromInput Function', () => {
+    it('is async function', () =>
+      assertTrue(w.watchAddFromInput.constructor.name === 'AsyncFunction'));
   });
 };

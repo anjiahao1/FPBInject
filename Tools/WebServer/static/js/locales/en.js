@@ -150,6 +150,8 @@ window.i18nResources['en'] = {
       add_placeholder: 'Add expression...',
       refresh_all: 'Refresh All',
       clear_all: 'Clear All',
+      collapse_all: 'Collapse All',
+      auto_off: 'Off',
       no_watches: 'No watch expressions',
       add_tooltip: 'Add',
       refresh_tooltip: 'Refresh',

@@ -150,6 +150,8 @@ window.i18nResources['zh-TW'] = {
       add_placeholder: '新增表達式...',
       refresh_all: '全部重新整理',
       clear_all: '全部清除',
+      collapse_all: '全部摺疊',
+      auto_off: '關閉',
       no_watches: '無監視表達式',
       add_tooltip: '新增',
       refresh_tooltip: '重新整理',

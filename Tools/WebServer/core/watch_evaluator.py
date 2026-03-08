@@ -75,6 +75,11 @@ class WatchEvaluator:
             struct_layout = None
             if is_aggregate:
                 struct_layout = self._get_struct_layout(type_name)
+            elif not is_pointer:
+                # Try to get struct layout for typedef types (e.g., lv_disp_t)
+                struct_layout = self._get_struct_layout(type_name)
+                if struct_layout:
+                    is_aggregate = True
 
             return {
                 "addr": addr,

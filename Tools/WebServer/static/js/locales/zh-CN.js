@@ -150,6 +150,8 @@ window.i18nResources['zh-CN'] = {
       add_placeholder: '添加表达式...',
       refresh_all: '全部刷新',
       clear_all: '全部清除',
+      collapse_all: '全部折叠',
+      auto_off: '关闭',
       no_watches: '无监视表达式',
       add_tooltip: '添加',
       refresh_tooltip: '刷新',

@@ -1,11 +1,16 @@
 /*========================================
   FPBInject Workbench - Watch Expression Module
+  VS Code-style Tree View Implementation
   ========================================*/
 
 /* ===========================
    WATCH STATE
    =========================== */
 const _watchAutoTimers = new Map();
+const _watchPrevValues = new Map(); // For value change highlighting
+const _watchExpandedState = new Map(); // Track expanded/collapsed state
+let _watchAutoRefreshInterval = 0;
+let _watchAutoRefreshTimer = null;
 
 /* ===========================
    WATCH EXPRESSION API
@@ -97,12 +102,10 @@ function _renderWatchValue(data) {
     return '<span class="watch-no-data">—</span>';
   }
 
-  if (
-    data.is_aggregate &&
-    data.struct_layout &&
-    data.struct_layout.length > 0
-  ) {
-    return _renderWatchStructTable(data.hex_data, data.struct_layout);
+  // For aggregate types, return summary (children shown in tree)
+  if (data.is_aggregate && data.struct_layout && data.struct_layout.length > 0) {
+    const typeName = data.type_name || 'struct';
+    return `<span class="watch-type-summary">{${data.struct_layout.length} fields}</span>`;
   }
 
   // Scalar value
@@ -162,61 +165,250 @@ function _renderWatchStructTable(hexData, layout) {
 }
 
 /* ===========================
-   WATCH PANEL RENDERING
+   TREE VIEW RENDERING
    =========================== */
 
-function renderWatchEntry(id, expr, data) {
+function _buildWatchTreeNode(id, expr, name, data, depth = 0) {
   const hasData = data && data.success;
-  const typeInfo = hasData ? data.type_name : '';
-  const addrInfo = hasData ? data.addr : '';
-  const sizeInfo = hasData ? `${data.size}B` : '';
-  const errorMsg = data && !data.success ? data.error : '';
+  const typeName = hasData ? data.type_name : '';
+  const isExpandable = hasData && data.is_aggregate && data.struct_layout && data.struct_layout.length > 0;
+  const nodeId = `${id}`;
+  const isExpanded = _watchExpandedState.get(nodeId) !== false; // Default expanded
 
   let valueHtml = '';
   if (hasData) {
     valueHtml = _renderWatchValue(data);
-  } else if (errorMsg) {
-    valueHtml = `<span class="watch-error">${errorMsg}</span>`;
+  } else if (data && data.error) {
+    valueHtml = `<span class="watch-error">${data.error}</span>`;
   }
 
-  const refreshTitle =
-    typeof t === 'function' ? t('watch.refresh_tooltip', 'Refresh') : 'Refresh';
-  const removeTitle =
-    typeof t === 'function' ? t('watch.remove_tooltip', 'Remove') : 'Remove';
+  // Build node HTML
+  let html = `<div class="watch-tree-node" data-watch-id="${nodeId}" data-depth="${depth}" style="--depth: ${depth}">`;
 
-  return `<div class="watch-entry" data-watch-id="${id}">
-    <div class="watch-entry-header">
-      <span class="watch-expr" title="${addrInfo} ${typeInfo} ${sizeInfo}">${expr}</span>
-      <span class="watch-actions">
-        <button class="watch-btn" onclick="watchRefreshOne(${id}, '${expr.replace(/'/g, "\\'")}')" title="${refreshTitle}"><i class="codicon codicon-refresh"></i></button>
-        <button class="watch-btn" onclick="watchRemoveEntry(${id})" title="${removeTitle}"><i class="codicon codicon-close"></i></button>
-      </span>
-    </div>
-    <div class="watch-entry-value">${valueHtml}</div>
-  </div>`;
+  // Expand icon
+  if (isExpandable) {
+    const iconClass = isExpanded ? 'expanded' : 'collapsed';
+    html += `<span class="watch-expand-icon ${iconClass}" onclick="watchToggleExpand('${nodeId}')"></span>`;
+  } else {
+    html += `<span class="watch-expand-icon leaf"></span>`;
+  }
+
+  // Name/Expression
+  html += `<span class="watch-node-name">${escapeHtml(name || expr)}</span>`;
+
+  // Type (dimmed)
+  if (typeName) {
+    html += `<span class="watch-node-type">${escapeHtml(typeName)}</span>`;
+  }
+
+  // Value
+  html += `<span class="watch-node-value" data-node-id="${nodeId}">${valueHtml}</span>`;
+
+  // Actions (only for root nodes)
+  if (depth === 0) {
+    const refreshTitle = typeof t === 'function' ? t('watch.refresh_tooltip', 'Refresh') : 'Refresh';
+    const removeTitle = typeof t === 'function' ? t('watch.remove_tooltip', 'Remove') : 'Remove';
+    html += `<span class="watch-node-actions">`;
+    html += `<button class="watch-btn" onclick="watchRefreshOne(${id}, '${expr.replace(/'/g, "\\'")}')" title="${refreshTitle}"><i class="codicon codicon-refresh"></i></button>`;
+    html += `<button class="watch-btn" onclick="watchRemoveEntry(${id})" title="${removeTitle}"><i class="codicon codicon-close"></i></button>`;
+    html += `</span>`;
+  }
+
+  html += `</div>`;
+
+  // Render children if expanded
+  if (isExpandable && isExpanded && data.hex_data) {
+    html += `<div class="watch-tree-children" data-parent="${nodeId}">`;
+    for (let i = 0; i < data.struct_layout.length; i++) {
+      const member = data.struct_layout[i];
+      const childId = `${id}.${i}`;
+      const childValue = _extractMemberValue(data.hex_data, member);
+      html += _buildWatchTreeChildNode(childId, member, childValue, depth + 1);
+    }
+    html += `</div>`;
+  }
+
+  return html;
+}
+
+function _buildWatchTreeChildNode(nodeId, member, value, depth) {
+  const typeName = member.type_name || '';
+  const isPtr = typeName.trim().endsWith('*');
+
+  let html = `<div class="watch-tree-node" data-watch-id="${nodeId}" data-depth="${depth}" style="--depth: ${depth}">`;
+
+  // No expand for simple fields (could add for nested structs later)
+  html += `<span class="watch-expand-icon leaf"></span>`;
+
+  // Field name
+  html += `<span class="watch-node-name">${escapeHtml(member.name)}</span>`;
+
+  // Type
+  html += `<span class="watch-node-type">${escapeHtml(typeName)}</span>`;
+
+  // Value
+  const valueHtml = value !== null
+    ? `<span class="watch-decoded">${value.decoded}</span> <span class="watch-hex-hint">(${value.hex})</span>`
+    : '<span class="watch-no-data">—</span>';
+
+  html += `<span class="watch-node-value" data-node-id="${nodeId}">${valueHtml}</span>`;
+
+  // Deref button for pointers
+  if (isPtr && value && value.decoded !== '0x00000000') {
+    const derefTitle = typeof t === 'function' ? t('watch.deref_tooltip', 'Dereference') : 'Dereference';
+    html += `<button class="watch-deref-btn" onclick="watchDerefField('${nodeId}', '${value.decoded}', '${typeName}')" title="${derefTitle}">→</button>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+function _extractMemberValue(hexData, member) {
+  if (!hexData) return null;
+
+  const fieldHex = typeof _extractFieldHex === 'function'
+    ? _extractFieldHex(hexData, member.offset, member.size)
+    : '';
+
+  const decoded = typeof _decodeFieldValue === 'function'
+    ? _decodeFieldValue(hexData, member.offset, member.size, member.type_name)
+    : fieldHex;
+
+  return { hex: fieldHex, decoded: decoded };
+}
+
+function watchToggleExpand(nodeId) {
+  const currentState = _watchExpandedState.get(nodeId);
+  const newState = currentState === false;
+  _watchExpandedState.set(nodeId, newState);
+
+  // Re-render the watch panel
+  watchRenderAll();
+}
+
+async function watchDerefField(nodeId, addr, typeName) {
+  const result = await watchDeref(addr, typeName);
+  if (result.success) {
+    // Add as new watch expression
+    const expr = `*(${typeName.replace(' *', ' *)')})${addr}`;
+    await watchAdd(expr);
+    await watchRenderAll();
+  } else {
+    if (typeof log !== 'undefined') {
+      log.error('Deref failed: ' + (result.error || ''));
+    }
+  }
+}
+
+/* ===========================
+   WATCH PANEL RENDERING
+   =========================== */
+
+// Store watch data for re-rendering
+const _watchDataCache = new Map();
+
+function renderWatchEntry(id, expr, data) {
+  // Cache data for re-rendering
+  _watchDataCache.set(id, { expr, data });
+  return _buildWatchTreeNode(id, expr, expr, data, 0);
+}
+
+async function watchRenderAll() {
+  const panel = document.getElementById('watchPanel');
+  if (!panel) return;
+
+  const listResult = await watchGetList();
+  if (!listResult.success) return;
+
+  if (listResult.watches.length === 0) {
+    const noWatchesText = typeof t === 'function'
+      ? t('watch.no_watches', 'No watch expressions')
+      : 'No watch expressions';
+    panel.innerHTML = `<div class="watch-empty">${noWatchesText}</div>`;
+    return;
+  }
+
+  let html = '';
+  for (const w of listResult.watches) {
+    const cached = _watchDataCache.get(w.id);
+    if (cached && cached.data) {
+      html += _buildWatchTreeNode(w.id, w.expr, w.expr, cached.data, 0);
+    } else {
+      // Fetch data if not cached
+      const data = await watchEvaluate(w.expr, true);
+      _watchDataCache.set(w.id, { expr: w.expr, data });
+      html += _buildWatchTreeNode(w.id, w.expr, w.expr, data, 0);
+    }
+  }
+  panel.innerHTML = html;
 }
 
 async function watchRefreshOne(id, expr) {
   const data = await watchEvaluate(expr, true);
-  const container = document.querySelector(
-    `.watch-entry[data-watch-id="${id}"]`,
-  );
-  if (container) {
-    const valueDiv = container.querySelector('.watch-entry-value');
-    if (valueDiv) {
-      valueDiv.innerHTML = data.success
-        ? _renderWatchValue(data)
-        : `<span class="watch-error">${data.error}</span>`;
+  const oldData = _watchDataCache.get(id);
+
+  // Check for value changes and highlight
+  if (oldData && oldData.data && data.success) {
+    _checkAndHighlightChanges(id, oldData.data, data);
+  }
+
+  _watchDataCache.set(id, { expr, data });
+
+  // Re-render just this entry
+  const node = document.querySelector(`.watch-tree-node[data-watch-id="${id}"][data-depth="0"]`);
+  if (node) {
+    const parent = node.parentElement;
+    const newHtml = _buildWatchTreeNode(id, expr, expr, data, 0);
+
+    // Find and remove children container if exists
+    const childrenContainer = parent.querySelector(`.watch-tree-children[data-parent="${id}"]`);
+    if (childrenContainer) {
+      childrenContainer.remove();
     }
+
+    // Replace node
+    node.outerHTML = newHtml;
+  }
+}
+
+function _checkAndHighlightChanges(id, oldData, newData) {
+  // Compare hex_data for changes
+  if (oldData.hex_data !== newData.hex_data) {
+    setTimeout(() => {
+      const valueEl = document.querySelector(`.watch-node-value[data-node-id="${id}"]`);
+      if (valueEl) {
+        valueEl.classList.add('changed');
+        setTimeout(() => valueEl.classList.remove('changed'), 1000);
+      }
+    }, 50);
   }
 }
 
 async function watchRemoveEntry(id) {
   await watchRemove(id);
-  const container = document.querySelector(
-    `.watch-entry[data-watch-id="${id}"]`,
-  );
-  if (container) container.remove();
+  _watchDataCache.delete(id);
+  _watchExpandedState.delete(String(id));
+
+  // Remove from DOM
+  const node = document.querySelector(`.watch-tree-node[data-watch-id="${id}"][data-depth="0"]`);
+  if (node) {
+    // Also remove children container
+    const childrenContainer = node.parentElement.querySelector(`.watch-tree-children[data-parent="${id}"]`);
+    if (childrenContainer) {
+      childrenContainer.remove();
+    }
+    node.remove();
+  }
+
+  // Show empty message if no watches left
+  const panel = document.getElementById('watchPanel');
+  if (panel && panel.querySelectorAll('.watch-tree-node[data-depth="0"]').length === 0) {
+    const noWatchesText = typeof t === 'function'
+      ? t('watch.no_watches', 'No watch expressions')
+      : 'No watch expressions';
+    panel.innerHTML = `<div class="watch-empty">${noWatchesText}</div>`;
+  }
+
   // Stop auto-refresh if active
   if (_watchAutoTimers.has(id)) {
     clearInterval(_watchAutoTimers.get(id));
@@ -245,6 +437,8 @@ async function watchAddFromInput() {
 
   // Evaluate and render
   const data = await watchEvaluate(expr, true);
+  _watchDataCache.set(addResult.id, { expr, data });
+
   const panel = document.getElementById('watchPanel');
   if (!panel) return;
 
@@ -252,7 +446,7 @@ async function watchAddFromInput() {
   const empty = panel.querySelector('.watch-empty');
   if (empty) empty.remove();
 
-  const html = renderWatchEntry(addResult.id, expr, data);
+  const html = _buildWatchTreeNode(addResult.id, expr, expr, data, 0);
   panel.insertAdjacentHTML('beforeend', html);
 }
 
@@ -267,6 +461,10 @@ async function watchRefreshAll() {
 
 async function watchClearAll() {
   await watchClear();
+  _watchDataCache.clear();
+  _watchExpandedState.clear();
+  _watchPrevValues.clear();
+
   const panel = document.getElementById('watchPanel');
   if (panel) {
     const noWatchesText =
@@ -280,6 +478,60 @@ async function watchClearAll() {
     clearInterval(timerId);
   }
   _watchAutoTimers.clear();
+}
+
+/* ===========================
+   AUTO-REFRESH
+   =========================== */
+
+function watchSetAutoRefresh(intervalMs) {
+  if (_watchAutoRefreshTimer) {
+    clearInterval(_watchAutoRefreshTimer);
+    _watchAutoRefreshTimer = null;
+  }
+
+  _watchAutoRefreshInterval = intervalMs;
+
+  if (intervalMs > 0) {
+    _watchAutoRefreshTimer = setInterval(watchRefreshAll, intervalMs);
+    if (typeof log !== 'undefined') {
+      log.info(`Watch auto-refresh enabled: ${intervalMs}ms`);
+    }
+  } else {
+    if (typeof log !== 'undefined') {
+      log.info('Watch auto-refresh disabled');
+    }
+  }
+}
+
+function watchGetAutoRefreshInterval() {
+  return _watchAutoRefreshInterval;
+}
+
+/* ===========================
+   COLLAPSE/EXPAND ALL
+   =========================== */
+
+function watchCollapseAll() {
+  for (const [key] of _watchExpandedState) {
+    _watchExpandedState.set(key, false);
+  }
+  // Also collapse any that aren't tracked yet
+  const nodes = document.querySelectorAll('.watch-tree-node[data-depth="0"]');
+  nodes.forEach(node => {
+    const id = node.getAttribute('data-watch-id');
+    if (id) _watchExpandedState.set(id, false);
+  });
+  watchRenderAll();
+}
+
+function watchExpandAll() {
+  const nodes = document.querySelectorAll('.watch-tree-node[data-depth="0"]');
+  nodes.forEach(node => {
+    const id = node.getAttribute('data-watch-id');
+    if (id) _watchExpandedState.set(id, true);
+  });
+  watchRenderAll();
 }
 
 /* ===========================
@@ -297,6 +549,16 @@ window.renderWatchEntry = renderWatchEntry;
 window.watchAddFromInput = watchAddFromInput;
 window.watchRefreshAll = watchRefreshAll;
 window.watchClearAll = watchClearAll;
+window.watchRenderAll = watchRenderAll;
+window.watchToggleExpand = watchToggleExpand;
+window.watchDerefField = watchDerefField;
+window.watchSetAutoRefresh = watchSetAutoRefresh;
+window.watchGetAutoRefreshInterval = watchGetAutoRefreshInterval;
+window.watchCollapseAll = watchCollapseAll;
+window.watchExpandAll = watchExpandAll;
 window._renderWatchValue = _renderWatchValue;
 window._renderWatchStructTable = _renderWatchStructTable;
+window._buildWatchTreeNode = _buildWatchTreeNode;
 window._watchAutoTimers = _watchAutoTimers;
+window._watchDataCache = _watchDataCache;
+window._watchExpandedState = _watchExpandedState;
