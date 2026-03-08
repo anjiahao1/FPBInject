@@ -1708,11 +1708,11 @@ input[type="checkbox"] {
   color: var(--vscode-debugTokenExpression-name, #9cdcfe);
   margin-right: 8px;
   flex-shrink: 0;
-  max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   cursor: text;
+  user-select: text;
 }
 
 .watch-node-name.editable:hover {
@@ -1743,6 +1743,8 @@ input[type="checkbox"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  user-select: text;
+  cursor: text;
 }
 
 /* Node value */
@@ -1752,6 +1754,8 @@ input[type="checkbox"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  user-select: text;
+  cursor: text;
 }
 
 /* Value change highlight animation */
