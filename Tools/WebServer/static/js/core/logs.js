@@ -9,6 +9,17 @@ let logEventSource = null;
 let sseRetryCount = 0;
 const SSE_MAX_RETRIES = 3;
 
+// Track last time we received data from backend (for health check)
+let lastDataReceivedTime = 0;
+
+function updateLastDataReceivedTime() {
+  lastDataReceivedTime = Date.now();
+}
+
+function getLastDataReceivedTime() {
+  return lastDataReceivedTime;
+}
+
 function startLogStreaming() {
   const state = window.FPBState;
   stopLogStreaming();
@@ -29,6 +40,7 @@ function startLogStreaming() {
     logEventSource.onmessage = function (event) {
       try {
         const data = JSON.parse(event.data);
+        updateLastDataReceivedTime();
         processLogData(data);
       } catch (e) {
         console.warn('SSE parse error:', e);
@@ -165,6 +177,7 @@ async function fetchLogs() {
       return;
     }
 
+    updateLastDataReceivedTime();
     processLogData(data);
   } catch (e) {
     // Silently fail on polling errors
@@ -178,3 +191,5 @@ window.fetchLogs = fetchLogs;
 window.startLogStreaming = startLogStreaming;
 window.stopLogStreaming = stopLogStreaming;
 window.processLogData = processLogData;
+window.getLastDataReceivedTime = getLastDataReceivedTime;
+window.updateLastDataReceivedTime = updateLastDataReceivedTime;

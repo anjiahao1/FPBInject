@@ -676,11 +676,15 @@ module.exports = function (w) {
       global.fetch = async () => {
         throw new Error('Network error');
       };
+      // Mock getLastDataReceivedTime to return 0 (no recent data)
+      const origGetLastDataReceivedTime = global.getLastDataReceivedTime;
+      global.getLastDataReceivedTime = () => 0;
       await w.checkBackendHealth();
       assertTrue(alertCalled);
       assertTrue(alertMessage.includes('Backend server has disconnected'));
       global.fetch = origFetch;
       global.alert = origAlert;
+      global.getLastDataReceivedTime = origGetLastDataReceivedTime;
       w.FPBState.isConnected = false;
     });
 
@@ -695,12 +699,16 @@ module.exports = function (w) {
       global.fetch = async () => {
         throw new Error('Network error');
       };
+      // Mock getLastDataReceivedTime to return 0 (no recent data)
+      const origGetLastDataReceivedTime = global.getLastDataReceivedTime;
+      global.getLastDataReceivedTime = () => 0;
       await w.checkBackendHealth();
       await w.checkBackendHealth();
       await w.checkBackendHealth();
       assertEqual(alertCount, 1);
       global.fetch = origFetch;
       global.alert = origAlert;
+      global.getLastDataReceivedTime = origGetLastDataReceivedTime;
     });
 
     it('startBackendHealthCheck starts interval', () => {
@@ -741,6 +749,9 @@ module.exports = function (w) {
       global.fetch = async () => {
         throw new Error('Network error');
       };
+      // Mock getLastDataReceivedTime to return 0 (no recent data)
+      const origGetLastDataReceivedTime = global.getLastDataReceivedTime;
+      global.getLastDataReceivedTime = () => 0;
 
       await w.checkBackendHealth();
 
@@ -751,6 +762,7 @@ module.exports = function (w) {
 
       global.fetch = origFetch;
       global.alert = origAlert;
+      global.getLastDataReceivedTime = origGetLastDataReceivedTime;
     });
   });
 };
