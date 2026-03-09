@@ -151,13 +151,18 @@ static int parse_line(char* line, const char** argv, int max_argc) {
     return argc;
 }
 
-static int interactive_mode(fl_context_t* ctx) {
+static int interactive_mode(fl_context_t* ctx, int argc_first, char** argv_first) {
     char line[FL_NUTTX_LINE_SIZE];
     static const char* argv[32];
 
     printf("FPBInject Function Loader (NuttX)\n");
     nuttx_print_alloc_info();
     printf("Type --cmd <command> or 'quit' to exit\n\n");
+
+    /* Execute first command if provided */
+    if (argc_first > 1) {
+        fl_exec_cmd(ctx, argc_first, (const char**)argv_first);
+    }
 
     while (1) {
         printf("fl> ");
@@ -223,13 +228,7 @@ int main(int argc, char** argv) {
         fl_init(&ctx);
     }
 
-    if (argc > 1) {
-        printf("[FLERR] Enter '%s' to start interactive mode\n", argv[0]);
-        return 0;
-    }
-
-    /* No arguments - interactive mode */
-    return interactive_mode(&ctx);
+    return interactive_mode(&ctx, argc, argv);
 }
 
 #endif /* __NuttX__ */
