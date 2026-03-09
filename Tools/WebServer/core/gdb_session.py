@@ -351,6 +351,21 @@ class GDBSession:
 
         return responses
 
+    def _flush_pending(self):
+        """Drain any stale data from the pygdbmi buffer.
+
+        After a large GDB output (e.g. x/154wx), pygdbmi may still have
+        buffered console lines that haven't been consumed.  Sending a
+        lightweight echo command forces GDB to produce a new result record,
+        and pygdbmi will read (and discard) everything up to that record.
+        """
+        if not self._io:
+            return
+        try:
+            self._io.get_gdb_response(timeout_sec=0.1, raise_error_on_timeout=False)
+        except Exception:
+            pass
+
     def _execute_cli(self, cmd: str, timeout: float = GDB_CMD_TIMEOUT) -> Optional[str]:
         """Execute a GDB CLI command and return console output text.
 
@@ -626,6 +641,10 @@ class GDBSession:
         """Internal implementation of get_struct_layout."""
         t0 = time.time()
         logger.info(f"[GDB] get_struct_layout start: '{sym_name}'")
+
+        # Drain any stale output left from previous large commands
+        # (e.g. x/154wx memory reads) to prevent buffer cross-talk.
+        self._flush_pending()
 
         bare_name = re.sub(r"\[.*\]$", "", sym_name)
         output = self._execute_cli(f"ptype /o {bare_name}", timeout=30.0)
