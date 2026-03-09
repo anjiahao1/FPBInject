@@ -456,5 +456,142 @@ class TestAutoOpenBrowser(unittest.TestCase):
         self.assertIn("http://127.0.0.1:8080", log_output)
 
 
+class TestCheckRequirements(unittest.TestCase):
+    """check_requirements dependency checker tests"""
+
+    def _make_req_file(self, content):
+        """Create a temp dir with requirements.txt, return the 'sub' dir path."""
+        import tempfile
+
+        tmpdir = tempfile.mkdtemp()
+        req_path = os.path.join(tmpdir, "requirements.txt")
+        with open(req_path, "w") as f:
+            f.write(content)
+        # check_requirements looks at SCRIPT_DIR/../requirements.txt
+        subdir = os.path.join(tmpdir, "sub")
+        os.makedirs(subdir, exist_ok=True)
+        return subdir
+
+    def test_no_requirements_file(self):
+        """Returns True when requirements.txt doesn't exist."""
+        with patch("main.SCRIPT_DIR", "/nonexistent/path"):
+            result = main.check_requirements()
+        self.assertTrue(result)
+
+    def test_all_installed(self):
+        """Returns True when all packages are installed."""
+        subdir = self._make_req_file("Flask\ncoverage\n")
+        with patch("main.SCRIPT_DIR", subdir):
+            result = main.check_requirements()
+        self.assertTrue(result)
+
+    def test_comments_and_blanks_skipped(self):
+        """Comments and blank lines are ignored."""
+        subdir = self._make_req_file("# comment\n\n  \nFlask\n")
+        with patch("main.SCRIPT_DIR", subdir):
+            result = main.check_requirements()
+        self.assertTrue(result)
+
+    def test_version_specifiers_stripped(self):
+        """Version specifiers like >=, ==, < are stripped."""
+        subdir = self._make_req_file("Flask>=2.0\ncoverage==7.0\n")
+        with patch("main.SCRIPT_DIR", subdir):
+            result = main.check_requirements()
+        self.assertTrue(result)
+
+    def test_missing_package_non_interactive(self):
+        """Missing packages in non-interactive mode: returns True."""
+        subdir = self._make_req_file("nonexistent_pkg_xyz_12345\n")
+        with patch("main.SCRIPT_DIR", subdir), patch("sys.stdin") as mock_stdin:
+            mock_stdin.isatty.return_value = False
+            result = main.check_requirements()
+        self.assertTrue(result)
+
+    def test_missing_package_user_skips(self):
+        """User chooses 'n' to skip install."""
+        subdir = self._make_req_file("nonexistent_pkg_xyz_12345\n")
+        with patch("main.SCRIPT_DIR", subdir), patch("sys.stdin") as mock_stdin, patch(
+            "builtins.input", return_value="n"
+        ):
+            mock_stdin.isatty.return_value = True
+            result = main.check_requirements()
+        self.assertTrue(result)
+
+    def test_missing_package_user_quits(self):
+        """User chooses 'q' to quit."""
+        subdir = self._make_req_file("nonexistent_pkg_xyz_12345\n")
+        with patch("main.SCRIPT_DIR", subdir), patch("sys.stdin") as mock_stdin, patch(
+            "builtins.input", return_value="q"
+        ):
+            mock_stdin.isatty.return_value = True
+            with self.assertRaises(SystemExit):
+                main.check_requirements()
+
+    def test_missing_package_user_installs(self):
+        """User chooses 'y' to install."""
+        subdir = self._make_req_file("nonexistent_pkg_xyz_12345\n")
+        with patch("main.SCRIPT_DIR", subdir), patch("sys.stdin") as mock_stdin, patch(
+            "builtins.input", return_value="y"
+        ), patch("subprocess.call", return_value=0) as mock_call:
+            mock_stdin.isatty.return_value = True
+            result = main.check_requirements()
+        self.assertTrue(result)
+        mock_call.assert_called_once()
+        args = mock_call.call_args[0][0]
+        self.assertIn("nonexistent_pkg_xyz_12345", args)
+
+    def test_missing_package_user_default_enter(self):
+        """User presses Enter (default = install)."""
+        subdir = self._make_req_file("nonexistent_pkg_xyz_12345\n")
+        with patch("main.SCRIPT_DIR", subdir), patch("sys.stdin") as mock_stdin, patch(
+            "builtins.input", return_value=""
+        ), patch("subprocess.call", return_value=0) as mock_call:
+            mock_stdin.isatty.return_value = True
+            result = main.check_requirements()
+        self.assertTrue(result)
+        mock_call.assert_called_once()
+
+    def test_install_failure_continues(self):
+        """pip install failure still returns True."""
+        subdir = self._make_req_file("nonexistent_pkg_xyz_12345\n")
+        with patch("main.SCRIPT_DIR", subdir), patch("sys.stdin") as mock_stdin, patch(
+            "builtins.input", return_value="y"
+        ), patch("subprocess.call", return_value=1):
+            mock_stdin.isatty.return_value = True
+            result = main.check_requirements()
+        self.assertTrue(result)
+
+    def test_eof_on_input(self):
+        """EOFError on input returns True."""
+        subdir = self._make_req_file("nonexistent_pkg_xyz_12345\n")
+        with patch("main.SCRIPT_DIR", subdir), patch("sys.stdin") as mock_stdin, patch(
+            "builtins.input", side_effect=EOFError
+        ):
+            mock_stdin.isatty.return_value = True
+            result = main.check_requirements()
+        self.assertTrue(result)
+
+    def test_keyboard_interrupt_on_input(self):
+        """KeyboardInterrupt on input returns True."""
+        subdir = self._make_req_file("nonexistent_pkg_xyz_12345\n")
+        with patch("main.SCRIPT_DIR", subdir), patch("sys.stdin") as mock_stdin, patch(
+            "builtins.input", side_effect=KeyboardInterrupt
+        ):
+            mock_stdin.isatty.return_value = True
+            result = main.check_requirements()
+        self.assertTrue(result)
+
+    def test_pyserial_detected_via_metadata(self):
+        """pyserial (pip name != import name) detected via importlib.metadata."""
+        subdir = self._make_req_file("pyserial\n")
+        with patch("main.SCRIPT_DIR", subdir), patch(
+            "importlib.metadata.distribution"
+        ) as mock_dist:
+            mock_dist.return_value = Mock()
+            result = main.check_requirements()
+        self.assertTrue(result)
+        mock_dist.assert_called_with("pyserial")
+
+
 if __name__ == "__main__":
     unittest.main()

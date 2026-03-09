@@ -17,9 +17,12 @@ Module structure:
 """
 
 import argparse
+import importlib
+import importlib.metadata
 import logging
 import os
 import socket
+import subprocess
 import sys
 import webbrowser
 import threading
@@ -38,6 +41,68 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # Module logger
 logger = logging.getLogger(__name__)
+
+
+def check_requirements():
+    """Check if all required packages from requirements.txt are installed.
+
+    Returns True if all packages are available or user chose to continue.
+    """
+    req_path = os.path.join(SCRIPT_DIR, "..", "requirements.txt")
+    if not os.path.exists(req_path):
+        return True
+
+    missing = []
+    with open(req_path, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            # Extract package name (strip version specifiers)
+            pkg_name = line.split(">=")[0].split("==")[0].split("<")[0].strip()
+            if not pkg_name:
+                continue
+            # Use importlib.metadata to check by distribution (pip) name
+            # This correctly handles cases like pyserial (pip) -> serial (import)
+            try:
+                importlib.metadata.distribution(pkg_name)
+            except importlib.metadata.PackageNotFoundError:
+                missing.append(line)
+
+    if not missing:
+        return True
+
+    print(f"\n⚠️  Missing {len(missing)} required package(s):")
+    for pkg in missing:
+        print(f"   - {pkg}")
+    print()
+
+    # Non-interactive mode (CI, piped stdin): skip
+    if not sys.stdin.isatty():
+        print("Non-interactive mode, skipping install prompt.")
+        return True
+
+    try:
+        answer = (
+            input("Install now? [Y/n/q] (Y=install, n=skip, q=quit): ").strip().lower()
+        )
+    except (EOFError, KeyboardInterrupt):
+        return True
+
+    if answer == "q":
+        print("Aborted.")
+        sys.exit(0)
+    elif answer in ("", "y", "yes"):
+        print(f"Installing: {' '.join(missing)}")
+        ret = subprocess.call([sys.executable, "-m", "pip", "install"] + missing)
+        if ret != 0:
+            print("⚠️  Some packages failed to install, continuing anyway...")
+        else:
+            print("✅ All packages installed successfully.")
+    else:
+        print("Skipping install, continuing...")
+
+    return True
 
 
 def create_app():
@@ -171,6 +236,9 @@ def main():
 
     # Reduce verbosity of Flask/Werkzeug request logs
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
+
+    # Check dependencies
+    check_requirements()
 
     # Check if port is already in use, unless skipped
     if not args.skip_port_check:
