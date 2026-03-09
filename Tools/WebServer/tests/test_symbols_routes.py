@@ -658,9 +658,9 @@ class TestSymbolValueEndpoint(SymbolRoutesBase):
         )
         state.gdb_session = mock_session
         state.symbols = {
-            "__framebuffer_start__": {
-                "addr": 0x2001E000,
-                "size": 1789440,
+            "test_buffer": {
+                "addr": 0x20000000,
+                "size": 10485760,
                 "type": "variable",
                 "section": ".bss",
             }
@@ -669,14 +669,14 @@ class TestSymbolValueEndpoint(SymbolRoutesBase):
         with tempfile.NamedTemporaryFile(suffix=".elf", delete=False) as f:
             state.device.elf_path = f.name
         try:
-            response = self.client.get("/api/symbols/value?name=__framebuffer_start__")
+            response = self.client.get("/api/symbols/value?name=test_buffer")
             data = response.get_json()
             self.assertTrue(data["success"])
-            self.assertEqual(data["name"], "__framebuffer_start__")
+            self.assertEqual(data["name"], "test_buffer")
             self.assertIsNone(data["struct_layout"])
             self.assertIsNone(data["gdb_values"])
             mock_session.read_symbol_value.assert_called_once_with(
-                "__framebuffer_start__"
+                "test_buffer"
             )
             mock_session.read_symbol_value_and_layout.assert_not_called()
         finally:
@@ -838,6 +838,38 @@ class TestReadSymbolFromDevice(SymbolRoutesBase):
             data = response.get_json()
             self.assertFalse(data["success"])
             self.assertIn("Read failed", data["error"])
+        finally:
+            os.unlink(state.device.elf_path)
+
+    @patch("app.routes.symbols._get_struct_layout_cached")
+    @patch("app.routes.symbols._run_serial_op", side_effect=lambda func, **kw: func())
+    @patch("app.routes.symbols._get_fpb_inject")
+    def test_read_large_symbol_skips_layout(
+        self, mock_get_fpb, _mock_run_serial, mock_get_layout
+    ):
+        mock_fpb = Mock()
+        mock_fpb.read_memory.return_value = (b"\xaa" * 16, "Read 16 bytes OK")
+        mock_get_fpb.return_value = mock_fpb
+        state.symbols = {
+            "test_buffer": {
+                "addr": 0x20000000,
+                "size": 10485760,
+                "type": "variable",
+                "section": ".bss",
+            }
+        }
+        state.symbols_loaded = True
+        with tempfile.NamedTemporaryFile(suffix=".elf", delete=False) as f:
+            state.device.elf_path = f.name
+        try:
+            response = self.client.post(
+                "/api/symbols/read", json={"name": "test_buffer"}
+            )
+            data = response.get_json()
+            self.assertTrue(data["success"])
+            self.assertIsNone(data["struct_layout"])
+            self.assertIsNone(data["gdb_values"])
+            mock_get_layout.assert_not_called()
         finally:
             os.unlink(state.device.elf_path)
 
@@ -1570,6 +1602,43 @@ class TestReadSymbolStream(SymbolRoutesBase):
             events = _parse_sse_events(response.get_data(as_text=True))
             result_evt = next(e for e in events if e["type"] == "result")
             self.assertFalse(result_evt["success"])
+        finally:
+            os.unlink(state.device.elf_path)
+
+    @patch("app.routes.symbols._get_struct_layout_cached")
+    @patch("app.routes.symbols._get_fpb_inject")
+    @patch("app.routes.symbols._lookup_symbol")
+    def test_stream_large_symbol_skips_layout(
+        self, mock_lookup, mock_fpb_fn, mock_get_layout
+    ):
+        mock_lookup.return_value = {
+            "addr": 0x20000000,
+            "size": 10485760,
+            "type": "variable",
+            "is_pointer": False,
+        }
+        mock_fpb = Mock()
+
+        def fake_read(addr, size, progress_callback=None):
+            if progress_callback:
+                progress_callback(size, size)
+            return b"\x01" * 16, "OK"
+
+        mock_fpb.read_memory.side_effect = fake_read
+        mock_fpb_fn.return_value = mock_fpb
+
+        with tempfile.NamedTemporaryFile(suffix=".elf", delete=False) as f:
+            state.device.elf_path = f.name
+        try:
+            response = self.client.post(
+                "/api/symbols/read/stream", json={"name": "test_buffer"}
+            )
+            events = _parse_sse_events(response.get_data(as_text=True))
+            result_evt = next(e for e in events if e["type"] == "result")
+            self.assertTrue(result_evt["success"])
+            self.assertIsNone(result_evt["struct_layout"])
+            self.assertIsNone(result_evt["gdb_values"])
+            mock_get_layout.assert_not_called()
         finally:
             os.unlink(state.device.elf_path)
 

@@ -924,9 +924,15 @@ def api_read_symbol_from_device():
         struct_layout = None
         gdb_values = None
         if not is_pointer:
-            struct_layout = _get_struct_layout_cached(sym_name)
-            if struct_layout:
-                gdb_values = _decode_struct_values(struct_layout, hex_data)
+            if size > MAX_LAYOUT_ANALYSIS_SIZE:
+                logger.warning(
+                    f"[read] skip struct layout for large symbol '{sym_name}' "
+                    f"(size={size} > {MAX_LAYOUT_ANALYSIS_SIZE})"
+                )
+            else:
+                struct_layout = _get_struct_layout_cached(sym_name)
+                if struct_layout:
+                    gdb_values = _decode_struct_values(struct_layout, hex_data)
 
         resp = {
             "success": True,
@@ -1125,9 +1131,15 @@ def api_read_symbol_stream():
             struct_layout = None
             gdb_values = None
             if not is_pointer:
-                struct_layout = _get_struct_layout_cached(sym_name)
-                if struct_layout:
-                    gdb_values = _decode_struct_values(struct_layout, hex_data)
+                if size > MAX_LAYOUT_ANALYSIS_SIZE:
+                    logger.warning(
+                        f"[read/stream] skip struct layout for large symbol '{sym_name}' "
+                        f"(size={size} > {MAX_LAYOUT_ANALYSIS_SIZE})"
+                    )
+                else:
+                    struct_layout = _get_struct_layout_cached(sym_name)
+                    if struct_layout:
+                        gdb_values = _decode_struct_values(struct_layout, hex_data)
 
             resp = {
                 "type": "result",
