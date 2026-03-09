@@ -93,6 +93,7 @@ def run_tests(
                     "*/__pycache__/*",
                     "*/static/*",
                     "*/templates/*",
+                    "*/gdb_json_print.py",
                 ],
             )
             cov.start()
