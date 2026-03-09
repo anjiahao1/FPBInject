@@ -675,9 +675,7 @@ class TestSymbolValueEndpoint(SymbolRoutesBase):
             self.assertEqual(data["name"], "test_buffer")
             self.assertIsNone(data["struct_layout"])
             self.assertIsNone(data["gdb_values"])
-            mock_session.read_symbol_value.assert_called_once_with(
-                "test_buffer"
-            )
+            mock_session.read_symbol_value.assert_called_once_with("test_buffer")
             mock_session.read_symbol_value_and_layout.assert_not_called()
         finally:
             os.unlink(state.device.elf_path)

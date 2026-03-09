@@ -990,9 +990,7 @@ async function saveSymbolData(symName) {
       const data = await res.json();
 
       if (data.success) {
-        log.success(
-          `Saved ${data.size} bytes to: ${fullPath}`,
-        );
+        log.success(`Saved ${data.size} bytes to: ${fullPath}`);
       } else {
         log.error(`Failed to save: ${data.error}`);
       }
