@@ -580,6 +580,7 @@ class FPBInject:
         source_content: str = None,
         patch_mode: str = "trampoline",
         progress_callback=None,
+        status_callback=None,
         source_ext: str = None,
         original_source_file: str = None,
         source_file: str = None,
@@ -591,6 +592,11 @@ class FPBInject:
         Supports two modes:
         1. Content mode (legacy): source_content contains the patch code.
         2. In-place mode: source_file + inject_functions for direct compilation.
+
+        Args:
+            status_callback: Optional callback(event_dict) for per-function
+                status events.  Called with ``{"stage": ..., "index": ...,
+                "name": ..., "total": ...}`` at each lifecycle point.
         """
         result = {
             "compile_time": 0,
@@ -662,8 +668,18 @@ class FPBInject:
         total_upload_time = 0
         total_code_size = 0
 
-        for target_func, inject_func in injection_targets:
+        for idx, (target_func, inject_func) in enumerate(injection_targets):
             logger.info(f"Injecting {target_func} -> {inject_func}")
+
+            if status_callback:
+                status_callback(
+                    {
+                        "stage": "injecting",
+                        "index": idx,
+                        "name": target_func,
+                        "total": len(injection_targets),
+                    }
+                )
 
             success, inj_result = self.inject(
                 source_content=source_content,

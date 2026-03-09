@@ -273,30 +273,109 @@ async function fpbInjectMulti() {
 
   log.info('Injecting all functions...');
 
+  // Reuse global inject progress bar
+  const progressEl = document.getElementById('injectProgress');
+  const progressText = document.getElementById('injectProgressText');
+  const progressFill = document.getElementById('injectProgressFill');
+  const hideProgress = (delay = 2000) => {
+    setTimeout(() => {
+      if (progressEl) progressEl.style.display = 'none';
+      if (progressFill) {
+        progressFill.style.width = '0%';
+        progressFill.style.background = '';
+      }
+    }, delay);
+  };
+
+  if (progressEl) progressEl.style.display = 'flex';
+  if (progressText)
+    progressText.textContent = t('statusbar.starting', 'Starting...');
+  if (progressFill) {
+    progressFill.style.width = '5%';
+    progressFill.style.background = '';
+  }
+
   try {
     const patchMode =
       document.getElementById('patchMode')?.value || 'trampoline';
-    const res = await fetch('/api/fpb/inject/multi', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        source_content: patchSource,
-        patch_mode: patchMode,
-      }),
-    });
-    const data = await res.json();
 
-    if (data.success) {
+    let totalFuncs = 1;
+    let currentIndex = 0;
+
+    const data = await consumeSSEStream(
+      '/api/fpb/inject/multi/stream',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          source_content: patchSource,
+          patch_mode: patchMode,
+        }),
+      },
+      {
+        onStatus(ev) {
+          if (ev.stage === 'compiling') {
+            if (progressText)
+              progressText.textContent = t(
+                'statusbar.compiling',
+                'Compiling...',
+              );
+            if (progressFill) progressFill.style.width = '10%';
+          } else if (ev.stage === 'injecting') {
+            totalFuncs = ev.total || 1;
+            currentIndex = ev.index || 0;
+            const basePercent = 15 + (currentIndex / totalFuncs) * 80;
+            if (progressText)
+              progressText.textContent = t(
+                'statusbar.injecting_func',
+                `Injecting ${ev.name} (${currentIndex + 1}/${totalFuncs})...`,
+                { name: ev.name, current: currentIndex + 1, total: totalFuncs },
+              );
+            if (progressFill) progressFill.style.width = `${basePercent}%`;
+          }
+        },
+        onProgress(ev) {
+          // Per-chunk upload progress within current function
+          const funcWeight = 80 / totalFuncs;
+          const funcBase = 15 + currentIndex * funcWeight;
+          const uploadPercent = ev.percent || 0;
+          const overall = funcBase + (uploadPercent / 100) * funcWeight;
+          if (progressFill) progressFill.style.width = `${overall}%`;
+          if (progressText) {
+            progressText.textContent = t(
+              'statusbar.uploading_func',
+              `Uploading (${currentIndex + 1}/${totalFuncs}) ${uploadPercent.toFixed(0)}%`,
+              {
+                current: currentIndex + 1,
+                total: totalFuncs,
+                percent: uploadPercent.toFixed(0),
+              },
+            );
+          }
+        },
+      },
+    );
+
+    if (data && data.success) {
       const successCount = data.successful_count || 0;
       const totalCount = data.total_count || 0;
       log.success(`Injected ${successCount}/${totalCount} functions`);
+      if (progressText)
+        progressText.textContent = t('statusbar.complete', 'Complete!');
+      if (progressFill) progressFill.style.width = '100%';
       displayAutoInjectStats(data, 'multi');
       await fpbInfo();
+      hideProgress();
     } else {
-      log.error(`Multi-inject failed: ${data.error || 'Unknown error'}`);
+      log.error(`Multi-inject failed: ${data?.error || 'Unknown error'}`);
+      if (progressFill) progressFill.style.background = '#f44336';
+      if (progressText) progressText.textContent = data?.error || 'Failed';
+      hideProgress(3000);
     }
   } catch (e) {
     log.error(`Multi-inject error: ${e}`);
+    if (progressFill) progressFill.style.background = '#f44336';
+    hideProgress(3000);
   }
 }
 

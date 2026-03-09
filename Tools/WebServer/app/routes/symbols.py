@@ -15,6 +15,7 @@ import time
 
 from flask import Blueprint, jsonify, request, Response
 
+from app.utils.sse import sse_response
 from core.state import state
 from services.device_worker import run_in_device_worker
 
@@ -258,15 +259,10 @@ def _decode_struct_values(struct_layout, hex_data):
             result[name] = decoded
             continue
 
-        # 2) Unknown type → try nested struct via GDB layout
-        sub_layout = _get_nested_struct_layout(type_name)
-        if sub_layout:
-            sub_hex = field_bytes.hex()
-            sub_values = _decode_struct_values(sub_layout, sub_hex)
-            if sub_values:
-                result[name] = sub_values
-                continue
-
+        # 2) Unknown type → mark as collapsed struct placeholder.
+        #    The frontend renders this as an expandable node; nested
+        #    layout is fetched on-demand when the user clicks to expand,
+        #    avoiding expensive recursive GDB queries upfront.
         # 3) Typedef fallback (e.g. lv_coord_t → unsigned int)
         fallback = _decode_field_value_fallback(field_bytes, type_name)
         result[name] = fallback
@@ -807,17 +803,27 @@ def api_get_symbol_value():
     struct_layout = None
     gdb_values = None
     if gdb_ok and state.gdb_session:
-        raw_data = state.gdb_session.read_symbol_value(sym_name)
-        t_read = time.time()
-        logger.info(f"[value] read_symbol_value: {t_read - t_lookup:.2f}s")
-        hex_data = raw_data.hex() if raw_data else None
-
-        if not is_pointer:
-            struct_layout = _get_struct_layout_cached(sym_name)
+        if is_pointer:
+            raw_data = state.gdb_session.read_symbol_value(sym_name)
+            t_read = time.time()
+            logger.info(f"[value] read_symbol_value: {t_read - t_lookup:.2f}s")
+            hex_data = raw_data.hex() if raw_data else None
+            t_struct = t_read
+        else:
+            # Combined read: hold GDB lock across x/Nwx + ptype /o to
+            # prevent pipe cross-talk between the two commands.
+            raw_data, struct_layout = state.gdb_session.read_symbol_value_and_layout(
+                sym_name
+            )
+            t_read = time.time()
+            logger.info(
+                f"[value] read_symbol_value_and_layout: {t_read - t_lookup:.2f}s"
+            )
+            hex_data = raw_data.hex() if raw_data else None
             if struct_layout:
                 gdb_values = _get_gdb_values(sym_name, addr, struct_layout)
-        t_struct = time.time()
-        logger.info(f"[value] get_struct_layout: {t_struct - t_read:.2f}s")
+            t_struct = time.time()
+            logger.info(f"[value] get_gdb_values: {t_struct - t_read:.2f}s")
     else:
         logger.info(
             f"[value] GDB not available, returning nm-only info for '{sym_name}'"
@@ -974,6 +980,167 @@ def api_read_symbol_from_device():
         return jsonify(resp)
     except Exception as e:
         return jsonify({"success": False, "error": str(e)})
+
+
+@bp.route("/symbols/read/stream", methods=["POST"])
+def api_read_symbol_stream():
+    """Read symbol value from device with per-chunk SSE progress.
+
+    Same parameters as /symbols/read but returns text/event-stream.
+
+    SSE events:
+        {type: "status", stage: "reading", symbol, addr, size}
+        {type: "progress", read, total, percent}
+        {type: "result", success, name, addr, size, hex_data, struct_layout, ...}
+    """
+    import queue
+    import threading
+
+    data = request.get_json() or {}
+    sym_name = data.get("name", "").strip()
+    deref = data.get("deref", False)  # noqa: F841
+    if not sym_name:
+        return jsonify({"success": False, "error": "Symbol name not specified"})
+
+    device = state.device
+    if not device.elf_path or not os.path.exists(device.elf_path):
+        return jsonify({"success": False, "error": "ELF file not found"})
+
+    sym_info = _lookup_symbol(sym_name)
+    if not sym_info:
+        return jsonify({"success": False, "error": f"Symbol '{sym_name}' not found"})
+
+    addr = _get_addr(sym_info)
+    size = sym_info.get("size", 0) if isinstance(sym_info, dict) else 0
+    is_pointer = (
+        sym_info.get("is_pointer", False) if isinstance(sym_info, dict) else False
+    )
+    pointer_target = (
+        sym_info.get("pointer_target") if isinstance(sym_info, dict) else None
+    )
+    if size <= 0:
+        return jsonify(
+            {"success": False, "error": f"Symbol '{sym_name}' has unknown size"}
+        )
+
+    progress_queue = queue.Queue()
+
+    def read_task():
+        try:
+            fpb = _get_fpb_inject()
+
+            progress_queue.put(
+                {
+                    "type": "status",
+                    "stage": "reading",
+                    "symbol": sym_name,
+                    "addr": f"0x{addr:08X}",
+                    "size": size,
+                }
+            )
+
+            last_pct = {"v": -1}
+
+            def progress_cb(offset, total):
+                pct = round(offset * 100 / total, 1) if total > 0 else 0
+                if int(pct) != last_pct["v"]:
+                    last_pct["v"] = int(pct)
+                    progress_queue.put(
+                        {
+                            "type": "progress",
+                            "read": offset,
+                            "total": total,
+                            "percent": pct,
+                        }
+                    )
+
+            def do_read():
+                return fpb.read_memory(addr, size, progress_callback=progress_cb)
+
+            timeout = _dynamic_timeout(size)
+            if not run_in_device_worker(device, lambda: None, timeout=0.1):
+                # Quick check if worker is alive
+                pass
+
+            result = {"data": None, "error": None}
+
+            def do_read_wrapper():
+                try:
+                    result["data"] = fpb.read_memory(
+                        addr, size, progress_callback=progress_cb
+                    )
+                except Exception as e:
+                    result["error"] = str(e)
+
+            if not run_in_device_worker(device, do_read_wrapper, timeout=timeout):
+                progress_queue.put(
+                    {
+                        "type": "result",
+                        "success": False,
+                        "error": "Device worker timeout",
+                    }
+                )
+                progress_queue.put(None)
+                return
+
+            if result["error"]:
+                progress_queue.put(
+                    {
+                        "type": "result",
+                        "success": False,
+                        "error": result["error"],
+                    }
+                )
+                progress_queue.put(None)
+                return
+
+            raw_data, msg = result["data"]
+            if raw_data is None:
+                progress_queue.put(
+                    {
+                        "type": "result",
+                        "success": False,
+                        "error": msg or "Read failed",
+                    }
+                )
+                progress_queue.put(None)
+                return
+
+            hex_data = raw_data.hex()
+
+            struct_layout = None
+            gdb_values = None
+            if not is_pointer:
+                struct_layout = _get_struct_layout_cached(sym_name)
+                if struct_layout:
+                    gdb_values = _decode_struct_values(struct_layout, hex_data)
+
+            resp = {
+                "type": "result",
+                "success": True,
+                "name": sym_name,
+                "addr": f"0x{addr:08X}",
+                "size": size,
+                "hex_data": hex_data,
+                "struct_layout": struct_layout,
+                "gdb_values": gdb_values,
+                "source": "device",
+            }
+            if is_pointer:
+                resp["is_pointer"] = True
+                resp["pointer_target"] = pointer_target
+
+            progress_queue.put(resp)
+
+        except Exception as e:
+            progress_queue.put({"type": "result", "success": False, "error": str(e)})
+        finally:
+            progress_queue.put(None)
+
+    thread = threading.Thread(target=read_task, daemon=True)
+    thread.start()
+
+    return sse_response(progress_queue)
 
 
 @bp.route("/symbols/write", methods=["POST"])
@@ -1167,15 +1334,16 @@ def api_memory_write():
 
 @bp.route("/memory/read/stream", methods=["POST"])
 def api_memory_read_stream():
-    """Read memory with SSE progress streaming.
+    """Read memory with real-time SSE progress streaming.
 
     JSON body:
         addr: hex address string or int
         size: number of bytes to read
 
-    Returns: text/event-stream with progress events and final result.
+    Returns: text/event-stream with per-chunk progress events and final result.
     """
-    import json as json_mod
+    import queue
+    import threading
 
     data = request.get_json() or {}
     addr = _parse_addr(data.get("addr"))
@@ -1194,85 +1362,83 @@ def api_memory_read_stream():
     if size > 65536:
         return jsonify({"success": False, "error": "Size exceeds 64KB limit"})
 
-    def generate():
+    progress_queue = queue.Queue()
+
+    def read_task():
         try:
             fpb = _get_fpb_inject()
-            progress_state = {"last_pct": -1}
+            last_pct = {"v": -1}
 
-            def on_progress(offset, total):
+            def progress_cb(offset, total):
                 pct = int(offset * 100 / total) if total > 0 else 0
-                # Only emit when percentage changes to avoid flooding
-                if pct != progress_state["last_pct"]:
-                    progress_state["last_pct"] = pct
-                    evt = {"type": "progress", "offset": offset, "total": total}
-                    yield f"data: {json_mod.dumps(evt)}\n\n"
+                if pct != last_pct["v"]:
+                    last_pct["v"] = pct
+                    progress_queue.put(
+                        {
+                            "type": "progress",
+                            "offset": offset,
+                            "total": total,
+                            "pct": pct,
+                        }
+                    )
 
-            # We can't yield from inside the worker callback directly,
-            # so we collect progress events and the result, then yield them.
-            events = []
             result_holder = {"data": None, "error": None}
 
             def do_read():
-                def cb(offset, total):
-                    pct = int(offset * 100 / total) if total > 0 else 0
-                    if not events or events[-1].get("pct") != pct:
-                        events.append(
-                            {
-                                "type": "progress",
-                                "offset": offset,
-                                "total": total,
-                                "pct": pct,
-                            }
-                        )
-
-                raw, msg = fpb.read_memory(addr, size, progress_callback=cb)
-                result_holder["data"] = raw
-                result_holder["msg"] = msg
+                try:
+                    raw, msg = fpb.read_memory(
+                        addr, size, progress_callback=progress_cb
+                    )
+                    result_holder["data"] = raw
+                    result_holder["msg"] = msg
+                except Exception as e:
+                    result_holder["error"] = str(e)
 
             timeout = _dynamic_timeout(size)
             device = state.device
             ok = run_in_device_worker(device, do_read, timeout=timeout)
 
             if not ok:
-                evt = {
-                    "type": "result",
-                    "success": False,
-                    "error": "Operation timeout",
-                }
-                yield f"data: {json_mod.dumps(evt)}\n\n"
-                return
-
-            # Yield collected progress events
-            for evt in events:
-                yield f"data: {json_mod.dumps(evt)}\n\n"
-
-            raw = result_holder["data"]
-            if raw is None:
-                evt = {
-                    "type": "result",
-                    "success": False,
-                    "error": result_holder.get("msg", "Read failed"),
-                }
-                yield f"data: {json_mod.dumps(evt)}\n\n"
+                progress_queue.put(
+                    {
+                        "type": "result",
+                        "success": False,
+                        "error": "Operation timeout",
+                    }
+                )
+            elif result_holder["error"]:
+                progress_queue.put(
+                    {
+                        "type": "result",
+                        "success": False,
+                        "error": result_holder["error"],
+                    }
+                )
+            elif result_holder["data"] is None:
+                progress_queue.put(
+                    {
+                        "type": "result",
+                        "success": False,
+                        "error": result_holder.get("msg", "Read failed"),
+                    }
+                )
             else:
-                evt = {
-                    "type": "result",
-                    "success": True,
-                    "addr": f"0x{addr:08X}",
-                    "size": len(raw),
-                    "hex_data": raw.hex(),
-                }
-                yield f"data: {json_mod.dumps(evt)}\n\n"
-
+                raw = result_holder["data"]
+                progress_queue.put(
+                    {
+                        "type": "result",
+                        "success": True,
+                        "addr": f"0x{addr:08X}",
+                        "size": len(raw),
+                        "hex_data": raw.hex(),
+                    }
+                )
         except Exception as e:
-            evt = {"type": "result", "success": False, "error": str(e)}
-            yield f"data: {json_mod.dumps(evt)}\n\n"
+            progress_queue.put({"type": "result", "success": False, "error": str(e)})
+        finally:
+            progress_queue.put(None)
 
-    return Response(
-        generate(),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    thread = threading.Thread(target=read_task, daemon=True)
+    thread.start()
+
+    return sse_response(progress_queue)

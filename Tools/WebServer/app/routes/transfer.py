@@ -9,13 +9,13 @@ File Transfer API routes for FPBInject Web Server.
 Provides endpoints for file upload/download between PC and embedded device.
 """
 
-import json
 import logging
 import queue
 import threading
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, jsonify, request
 
+from app.utils.sse import sse_response
 from core.file_transfer import FileTransfer
 from core.state import state
 from utils.crc import crc16
@@ -510,36 +510,7 @@ def api_transfer_upload():
     thread = threading.Thread(target=upload_task, daemon=True)
     thread.start()
 
-    def generate():
-        # Inactivity timeout: 120 seconds without any progress
-        INACTIVITY_TIMEOUT = 120.0
-        while True:
-            try:
-                item = progress_queue.get(timeout=5.0)
-                if item is None:
-                    break
-                # Update activity time on any message
-                last_activity["time"] = time.time()
-                yield f"data: {json.dumps(item)}\n\n"
-            except queue.Empty:
-                # Check if transfer is still active
-                inactive_time = time.time() - last_activity["time"]
-                if inactive_time > INACTIVITY_TIMEOUT:
-                    # No activity for too long, timeout
-                    yield f"data: {json.dumps({'type': 'result', 'success': False, 'error': 'Transfer timeout - no activity'})}\n\n"
-                    break
-                # Send heartbeat to keep connection alive
-                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
-
-    return Response(
-        generate(),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "close",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    return sse_response(progress_queue)
 
 
 @bp.route("/transfer/download", methods=["POST"])
@@ -790,33 +761,4 @@ def api_transfer_download():
     thread = threading.Thread(target=download_task, daemon=True)
     thread.start()
 
-    def generate():
-        # Inactivity timeout: 120 seconds without any progress
-        INACTIVITY_TIMEOUT = 120.0
-        while True:
-            try:
-                item = progress_queue.get(timeout=5.0)
-                if item is None:
-                    break
-                # Update activity time on any message
-                last_activity["time"] = time.time()
-                yield f"data: {json.dumps(item)}\n\n"
-            except queue.Empty:
-                # Check if transfer is still active
-                inactive_time = time.time() - last_activity["time"]
-                if inactive_time > INACTIVITY_TIMEOUT:
-                    # No activity for too long, timeout
-                    yield f"data: {json.dumps({'type': 'result', 'success': False, 'error': 'Transfer timeout - no activity'})}\n\n"
-                    break
-                # Send heartbeat to keep connection alive
-                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
-
-    return Response(
-        generate(),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "close",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    return sse_response(progress_queue)

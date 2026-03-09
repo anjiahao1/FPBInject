@@ -304,6 +304,27 @@ class GDBSession:
         with self._lock:
             return self._read_symbol_value_impl(sym_name)
 
+    def read_symbol_value_and_layout(
+        self, sym_name: str
+    ) -> Tuple[Optional[bytes], Optional[List[dict]]]:
+        """Read raw bytes AND struct layout in a single lock-hold.
+
+        This avoids the race condition where another thread's GDB command
+        can interleave between read_symbol_value (x/Nwx) and
+        get_struct_layout (ptype /o), causing stale pipe data to
+        contaminate the ptype output.
+
+        Returns:
+            (raw_bytes, struct_layout) — either may be None.
+        """
+        if not self.is_alive:
+            return None, None
+        with self._lock:
+            raw = self._read_symbol_value_impl(sym_name)
+            # _get_struct_layout_impl has its own flush
+            layout = self._get_struct_layout_impl(sym_name)
+            return raw, layout
+
     # ------------------------------------------------------------------
     # Internal: GDB/MI communication via pygdbmi
     # ------------------------------------------------------------------
@@ -339,6 +360,18 @@ class GDBSession:
         if not responses:
             return None
 
+        # Diagnostic: count response types for commands that may have
+        # cross-talk issues (ptype, x/)
+        if logger.isEnabledFor(logging.DEBUG):
+            type_counts: Dict[str, int] = {}
+            for r in responses:
+                rtype = r.get("type", "unknown")
+                type_counts[rtype] = type_counts.get(rtype, 0) + 1
+            logger.debug(
+                f"[GDB] _write_mi: cmd={cmd!r}, "
+                f"resp_count={len(responses)}, types={type_counts}"
+            )
+
         # Check for error in result records
         for r in responses:
             if r.get("type") == "result" and r.get("message") == "error":
@@ -352,19 +385,40 @@ class GDBSession:
         return responses
 
     def _flush_pending(self):
-        """Drain any stale data from the pygdbmi buffer.
+        """Drain stale data from the pygdbmi pipe buffer.
 
-        After a large GDB output (e.g. x/154wx), pygdbmi may still have
-        buffered console lines that haven't been consumed.  Sending a
-        lightweight echo command forces GDB to produce a new result record,
-        and pygdbmi will read (and discard) everything up to that record.
+        After a heavy CLI command (e.g. ``x/154wx``), pygdbmi's
+        ``_io.write(read_response=True)`` returns when it sees ``^done``,
+        but the OS pipe may still contain trailing console-stream records
+        that GDB flushed in bursts.
+
+        Since this method is only called while holding ``_lock``, no other
+        thread can inject commands.  We loop-read with 200ms timeouts;
+        three consecutive empty reads confirm the pipe is truly empty.
+        The 200ms window handles GDB's bursty stdio flushing pattern.
         """
         if not self._io:
             return
-        try:
-            self._io.get_gdb_response(timeout_sec=0.1, raise_error_on_timeout=False)
-        except Exception:
-            pass
+
+        total_drained = 0
+        empty_rounds = 0
+        while empty_rounds < 3:
+            try:
+                responses = self._io.get_gdb_response(
+                    timeout_sec=0.2, raise_error_on_timeout=False
+                )
+            except Exception:
+                break
+            if not responses:
+                empty_rounds += 1
+            else:
+                empty_rounds = 0
+                total_drained += len(responses)
+
+        if total_drained > 0:
+            logger.info(f"[GDB] flush: drained {total_drained} stale responses")
+        else:
+            logger.debug("[GDB] flush: pipe clean, nothing to drain")
 
     def _execute_cli(self, cmd: str, timeout: float = GDB_CMD_TIMEOUT) -> Optional[str]:
         """Execute a GDB CLI command and return console output text.
@@ -642,12 +696,21 @@ class GDBSession:
         t0 = time.time()
         logger.info(f"[GDB] get_struct_layout start: '{sym_name}'")
 
-        # Drain any stale output left from previous large commands
-        # (e.g. x/154wx memory reads) to prevent buffer cross-talk.
+        # Always drain stale pipe data before ptype /o.
+        # This is critical when called after x/Nwx (via
+        # read_symbol_value_and_layout) or from a separate thread
+        # that may run while another thread's x/Nwx residue lingers.
         self._flush_pending()
 
         bare_name = re.sub(r"\[.*\]$", "", sym_name)
+        logger.info(f"[GDB] get_struct_layout: executing 'ptype /o {bare_name}'")
         output = self._execute_cli(f"ptype /o {bare_name}", timeout=30.0)
+        if output:
+            preview = output[:120].replace("\n", "\\n")
+            logger.info(
+                f"[GDB] get_struct_layout: ptype output len={len(output)}, "
+                f"preview={preview!r}"
+            )
 
         # Fallback for scoped symbols (e.g. "Class::Method()::var"):
         # Resolve linker name via address, then whatis -> ptype /o <type>.

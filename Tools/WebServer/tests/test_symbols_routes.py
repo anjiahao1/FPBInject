@@ -588,8 +588,10 @@ class TestSymbolValueEndpoint(SymbolRoutesBase):
     @patch("core.gdb_manager.is_gdb_available", return_value=True)
     def test_value_const_symbol(self, mock_gdb_avail):
         mock_session = Mock()
-        mock_session.read_symbol_value.return_value = b"\x01\x02\x03\x04"
-        mock_session.get_struct_layout.return_value = None
+        mock_session.read_symbol_value_and_layout.return_value = (
+            b"\x01\x02\x03\x04",
+            None,
+        )
         state.gdb_session = mock_session
         state.symbols = {
             "my_const": {
@@ -618,10 +620,10 @@ class TestSymbolValueEndpoint(SymbolRoutesBase):
     def test_value_with_struct_layout(self, mock_gdb_avail):
         """struct_layout returned from GDB session."""
         mock_session = Mock()
-        mock_session.read_symbol_value.return_value = b"\x0a\x00\x00\x00\x14\x00"
-        mock_session.get_struct_layout.return_value = [
-            {"name": "x", "offset": 0, "size": 4, "type_name": "int"},
-        ]
+        mock_session.read_symbol_value_and_layout.return_value = (
+            b"\x0a\x00\x00\x00\x14\x00",
+            [{"name": "x", "offset": 0, "size": 4, "type_name": "int"}],
+        )
         mock_session.parse_struct_values.return_value = {"x": 10}
         state.gdb_session = mock_session
         state.symbols = {
@@ -648,8 +650,7 @@ class TestSymbolValueEndpoint(SymbolRoutesBase):
     @patch("core.gdb_manager.is_gdb_available", return_value=True)
     def test_value_bss_no_data(self, mock_gdb_avail):
         mock_session = Mock()
-        mock_session.read_symbol_value.return_value = None
-        mock_session.get_struct_layout.return_value = None
+        mock_session.read_symbol_value_and_layout.return_value = (None, None)
         state.gdb_session = mock_session
         state.symbols = {
             "bss_var": {
@@ -681,8 +682,7 @@ class TestSymbolValueEndpoint(SymbolRoutesBase):
             "type": "variable",
             "section": ".data",
         }
-        mock_session.read_symbol_value.return_value = b"\xff"
-        mock_session.get_struct_layout.return_value = None
+        mock_session.read_symbol_value_and_layout.return_value = (b"\xff", None)
         state.gdb_session = mock_session
         state.symbols = {"legacy_sym": 0x08003000}
         state.symbols_loaded = True
@@ -1147,63 +1147,6 @@ class TestMemoryWrite(SymbolRoutesBase):
         self.assertTrue(data["success"])
 
 
-class TestMemoryReadStream(SymbolRoutesBase):
-    """Test /api/memory/read/stream SSE endpoint."""
-
-    def test_no_addr(self):
-        response = self.client.post("/api/memory/read/stream", json={"size": 4})
-        data = response.get_json()
-        self.assertFalse(data["success"])
-        self.assertIn("addr", data["error"])
-
-    def test_no_size(self):
-        response = self.client.post(
-            "/api/memory/read/stream", json={"addr": "0x20000000"}
-        )
-        data = response.get_json()
-        self.assertFalse(data["success"])
-
-    def test_size_too_large(self):
-        response = self.client.post(
-            "/api/memory/read/stream",
-            json={"addr": "0x20000000", "size": 100000},
-        )
-        data = response.get_json()
-        self.assertFalse(data["success"])
-        self.assertIn("64KB", data["error"])
-
-    @patch(
-        "app.routes.symbols.run_in_device_worker",
-        side_effect=lambda device, func, timeout=5.0: (func(), True)[1],
-    )
-    @patch("app.routes.symbols._get_fpb_inject")
-    def test_stream_success(self, mock_get_fpb, mock_worker):
-        mock_fpb = Mock()
-        mock_fpb.read_memory.return_value = (b"\xaa\xbb", "OK")
-        mock_get_fpb.return_value = mock_fpb
-
-        response = self.client.post(
-            "/api/memory/read/stream",
-            json={"addr": "0x20000000", "size": 2},
-        )
-        self.assertIn("text/event-stream", response.content_type)
-        text = response.get_data(as_text=True)
-        self.assertIn('"type": "result"', text)
-        self.assertIn('"success": true', text)
-        self.assertIn("aabb", text)
-
-    @patch("app.routes.symbols.run_in_device_worker", return_value=False)
-    @patch("app.routes.symbols._get_fpb_inject")
-    def test_stream_timeout(self, mock_get_fpb, mock_worker):
-        mock_get_fpb.return_value = Mock()
-        response = self.client.post(
-            "/api/memory/read/stream",
-            json={"addr": "0x20000000", "size": 4},
-        )
-        text = response.get_data(as_text=True)
-        self.assertIn("timeout", text.lower())
-
-
 class TestDynamicTimeout(SymbolRoutesBase):
     """Test _dynamic_timeout helper."""
 
@@ -1427,19 +1370,8 @@ class TestDecodeStructValues(unittest.TestCase):
         self.assertNotEqual(result["hor_res"], 0)
         self.assertNotEqual(result["ver_res"], 0)
 
-    @patch("app.routes.symbols._get_nested_struct_layout")
-    def test_nested_struct_decoded_recursively(self, mock_nested):
-        """Nested struct fields should produce expandable dict values."""
-
-        def side_effect(type_name):
-            if type_name == "InnerStruct":
-                return [
-                    {"name": "a", "offset": 0, "size": 4, "type_name": "uint32_t"},
-                    {"name": "b", "offset": 4, "size": 4, "type_name": "uint32_t"},
-                ]
-            return None
-
-        mock_nested.side_effect = side_effect
+    def test_nested_struct_uses_fallback_not_recursive(self):
+        """Nested struct fields use typedef fallback (lazy-load, no recursion)."""
         layout = [
             {"name": "inner", "offset": 0, "size": 8, "type_name": "InnerStruct"},
             {"name": "id", "offset": 8, "size": 4, "type_name": "uint32_t"},
@@ -1448,10 +1380,10 @@ class TestDecodeStructValues(unittest.TestCase):
         hex_data = "010000000200000063000000"
         result = self._decode(layout, hex_data)
         self.assertEqual(result["id"], 99)
-        # inner should be a nested dict (expandable in frontend)
-        self.assertIsInstance(result["inner"], dict)
-        self.assertEqual(result["inner"]["a"], 1)
-        self.assertEqual(result["inner"]["b"], 2)
+        # inner is NOT recursively decoded — it's a fallback integer
+        # (frontend handles lazy expansion via separate API call)
+        self.assertIsNotNone(result["inner"])
+        self.assertNotIsInstance(result["inner"], dict)
 
     @patch("app.routes.symbols._get_nested_struct_layout")
     def test_nested_struct_no_layout_uses_fallback(self, mock_nested):
@@ -1467,6 +1399,284 @@ class TestDecodeStructValues(unittest.TestCase):
             result["inner"],
             int.from_bytes(bytes.fromhex("0102030405060708"), "little"),
         )
+
+
+# ---- Helpers for SSE stream tests ----
+
+
+def _parse_sse_events(body):
+    """Parse SSE text body into list of dicts."""
+    events = []
+    for line in body.split("\n"):
+        line = line.strip()
+        if line.startswith("data: "):
+            try:
+                events.append(json.loads(line[6:]))
+            except json.JSONDecodeError:
+                pass
+    return events
+
+
+def _mock_run_worker_sync(device, func, timeout=5.0):
+    """Mock run_in_device_worker that executes func synchronously."""
+    func()
+    return True
+
+
+class TestReadSymbolStream(SymbolRoutesBase):
+    """Tests for /symbols/read/stream SSE endpoint."""
+
+    def setUp(self):
+        super().setUp()
+        self.worker_patcher = patch(
+            "app.routes.symbols.run_in_device_worker",
+            side_effect=_mock_run_worker_sync,
+        )
+        self.worker_patcher.start()
+
+    def tearDown(self):
+        self.worker_patcher.stop()
+        super().tearDown()
+
+    def test_no_symbol_name(self):
+        """Missing symbol name returns JSON error."""
+        response = self.client.post("/api/symbols/read/stream", json={})
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("not specified", data["error"])
+
+    def test_no_elf(self):
+        """Missing ELF returns JSON error."""
+        response = self.client.post("/api/symbols/read/stream", json={"name": "my_var"})
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("ELF", data["error"])
+
+    @patch("app.routes.symbols._lookup_symbol")
+    def test_symbol_not_found(self, mock_lookup):
+        """Unknown symbol returns JSON error."""
+        mock_lookup.return_value = None
+        with tempfile.NamedTemporaryFile(suffix=".elf", delete=False) as f:
+            state.device.elf_path = f.name
+        try:
+            response = self.client.post(
+                "/api/symbols/read/stream", json={"name": "no_such"}
+            )
+            data = response.get_json()
+            self.assertFalse(data["success"])
+            self.assertIn("not found", data["error"])
+        finally:
+            os.unlink(state.device.elf_path)
+
+    @patch("app.routes.symbols._get_struct_layout_cached", return_value=None)
+    @patch("app.routes.symbols._get_fpb_inject")
+    @patch("app.routes.symbols._lookup_symbol")
+    def test_stream_success(self, mock_lookup, mock_fpb_fn, mock_layout):
+        """Successful read emits status + progress + result SSE events."""
+        mock_lookup.return_value = {
+            "addr": 0x20001000,
+            "size": 8,
+            "type": "variable",
+            "is_pointer": False,
+        }
+        mock_fpb = Mock()
+
+        def fake_read(addr, size, progress_callback=None):
+            if progress_callback:
+                progress_callback(4, 8)
+                progress_callback(8, 8)
+            return b"\x01\x02\x03\x04\x05\x06\x07\x08", "OK"
+
+        mock_fpb.read_memory.side_effect = fake_read
+        mock_fpb_fn.return_value = mock_fpb
+
+        with tempfile.NamedTemporaryFile(suffix=".elf", delete=False) as f:
+            state.device.elf_path = f.name
+        try:
+            response = self.client.post(
+                "/api/symbols/read/stream", json={"name": "my_var"}
+            )
+            self.assertIn("text/event-stream", response.content_type)
+            events = _parse_sse_events(response.get_data(as_text=True))
+
+            types = [e["type"] for e in events]
+            self.assertIn("status", types)
+            self.assertIn("result", types)
+
+            status_evt = next(e for e in events if e["type"] == "status")
+            self.assertEqual(status_evt["stage"], "reading")
+
+            result_evt = next(e for e in events if e["type"] == "result")
+            self.assertTrue(result_evt["success"])
+            self.assertEqual(result_evt["hex_data"], "0102030405060708")
+        finally:
+            os.unlink(state.device.elf_path)
+
+    @patch("app.routes.symbols._get_fpb_inject")
+    @patch("app.routes.symbols._lookup_symbol")
+    def test_stream_read_failure(self, mock_lookup, mock_fpb_fn):
+        """Read failure emits result event with success=False."""
+        mock_lookup.return_value = {
+            "addr": 0x20001000,
+            "size": 4,
+            "type": "variable",
+            "is_pointer": False,
+        }
+        mock_fpb = Mock()
+        mock_fpb.read_memory.return_value = (None, "Read timeout")
+        mock_fpb_fn.return_value = mock_fpb
+
+        with tempfile.NamedTemporaryFile(suffix=".elf", delete=False) as f:
+            state.device.elf_path = f.name
+        try:
+            response = self.client.post(
+                "/api/symbols/read/stream", json={"name": "my_var"}
+            )
+            events = _parse_sse_events(response.get_data(as_text=True))
+            result_evt = next(e for e in events if e["type"] == "result")
+            self.assertFalse(result_evt["success"])
+        finally:
+            os.unlink(state.device.elf_path)
+
+    @patch("app.routes.symbols._get_fpb_inject")
+    @patch("app.routes.symbols._lookup_symbol")
+    def test_stream_worker_timeout(self, mock_lookup, mock_fpb_fn):
+        """Device worker timeout emits result with error."""
+        mock_lookup.return_value = {
+            "addr": 0x20001000,
+            "size": 4,
+            "type": "variable",
+            "is_pointer": False,
+        }
+        mock_fpb_fn.return_value = Mock()
+
+        # Override worker to return False (timeout)
+        self.worker_patcher.stop()
+        timeout_patcher = patch(
+            "app.routes.symbols.run_in_device_worker", return_value=False
+        )
+        timeout_patcher.start()
+
+        with tempfile.NamedTemporaryFile(suffix=".elf", delete=False) as f:
+            state.device.elf_path = f.name
+        try:
+            response = self.client.post(
+                "/api/symbols/read/stream", json={"name": "my_var"}
+            )
+            events = _parse_sse_events(response.get_data(as_text=True))
+            result_evt = next(e for e in events if e["type"] == "result")
+            self.assertFalse(result_evt["success"])
+            self.assertIn("timeout", result_evt["error"].lower())
+        finally:
+            os.unlink(state.device.elf_path)
+            timeout_patcher.stop()
+            self.worker_patcher = patch(
+                "app.routes.symbols.run_in_device_worker",
+                side_effect=_mock_run_worker_sync,
+            )
+            self.worker_patcher.start()
+
+
+class TestMemoryReadStream(SymbolRoutesBase):
+    """Tests for /memory/read/stream SSE endpoint."""
+
+    def setUp(self):
+        super().setUp()
+        self.worker_patcher = patch(
+            "app.routes.symbols.run_in_device_worker",
+            side_effect=_mock_run_worker_sync,
+        )
+        self.worker_patcher.start()
+
+    def tearDown(self):
+        self.worker_patcher.stop()
+        super().tearDown()
+
+    def test_missing_addr(self):
+        """Missing addr returns JSON error."""
+        response = self.client.post("/api/memory/read/stream", json={"size": 16})
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("addr", data["error"].lower())
+
+    def test_invalid_size(self):
+        """Invalid size returns JSON error."""
+        response = self.client.post(
+            "/api/memory/read/stream", json={"addr": "0x20000000", "size": 0}
+        )
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("size", data["error"].lower())
+
+    def test_size_exceeds_limit(self):
+        """Size > 64KB returns JSON error."""
+        response = self.client.post(
+            "/api/memory/read/stream",
+            json={"addr": "0x20000000", "size": 70000},
+        )
+        data = response.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("64KB", data["error"])
+
+    @patch("app.routes.symbols._get_fpb_inject")
+    def test_stream_success(self, mock_fpb_fn):
+        """Successful memory read emits progress + result SSE events."""
+        mock_fpb = Mock()
+
+        def fake_read(addr, size, progress_callback=None):
+            if progress_callback:
+                progress_callback(8, 16)
+                progress_callback(16, 16)
+            return b"\xaa" * 16, "OK"
+
+        mock_fpb.read_memory.side_effect = fake_read
+        mock_fpb_fn.return_value = mock_fpb
+
+        response = self.client.post(
+            "/api/memory/read/stream",
+            json={"addr": "0x20000000", "size": 16},
+        )
+        self.assertIn("text/event-stream", response.content_type)
+        events = _parse_sse_events(response.get_data(as_text=True))
+
+        types = [e["type"] for e in events]
+        self.assertIn("result", types)
+
+        result_evt = next(e for e in events if e["type"] == "result")
+        self.assertTrue(result_evt["success"])
+        self.assertEqual(result_evt["size"], 16)
+        self.assertEqual(result_evt["hex_data"], "aa" * 16)
+
+    @patch("app.routes.symbols._get_fpb_inject")
+    def test_stream_read_failure(self, mock_fpb_fn):
+        """Read failure emits result with success=False."""
+        mock_fpb = Mock()
+        mock_fpb.read_memory.return_value = (None, "Device error")
+        mock_fpb_fn.return_value = mock_fpb
+
+        response = self.client.post(
+            "/api/memory/read/stream",
+            json={"addr": "0x20000000", "size": 4},
+        )
+        events = _parse_sse_events(response.get_data(as_text=True))
+        result_evt = next(e for e in events if e["type"] == "result")
+        self.assertFalse(result_evt["success"])
+
+    @patch("app.routes.symbols._get_fpb_inject")
+    def test_stream_exception(self, mock_fpb_fn):
+        """Exception in read task emits result with error."""
+        mock_fpb = Mock()
+        mock_fpb.read_memory.side_effect = RuntimeError("boom")
+        mock_fpb_fn.return_value = mock_fpb
+
+        response = self.client.post(
+            "/api/memory/read/stream",
+            json={"addr": "0x20000000", "size": 4},
+        )
+        events = _parse_sse_events(response.get_data(as_text=True))
+        result_evt = next(e for e in events if e["type"] == "result")
+        self.assertFalse(result_evt["success"])
+        self.assertIn("boom", result_evt["error"])
 
 
 if __name__ == "__main__":

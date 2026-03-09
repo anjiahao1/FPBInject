@@ -395,7 +395,7 @@ module.exports = function (w) {
       w.FPBState.isConnected = false;
     });
 
-    it('sends POST to /api/fpb/inject/multi', async () => {
+    it('sends POST to /api/fpb/inject/multi/stream', async () => {
       w.FPBState.isConnected = true;
       const mockTerm = new MockTerminal();
       w.FPBState.toolTerminal = mockTerm;
@@ -404,10 +404,10 @@ module.exports = function (w) {
         .map(() => ({ occupied: false }));
       browserGlobals.document.getElementById('patchSource').value =
         'void test() {}';
-      setFetchResponse('/api/fpb/inject/multi', {
-        success: true,
-        successful_count: 1,
-        total_count: 1,
+      setFetchResponse('/api/fpb/inject/multi/stream', {
+        _stream: [
+          'data: {"type":"result","success":true,"successful_count":1,"total_count":1}\n\n',
+        ],
       });
       setFetchResponse('/api/fpb/info', { success: true, slots: [] });
       await w.fpbInjectMulti();
@@ -426,13 +426,10 @@ module.exports = function (w) {
         .map(() => ({ occupied: false }));
       browserGlobals.document.getElementById('patchSource').value =
         'void test() {}';
-      setFetchResponse('/api/fpb/inject/multi', {
-        success: true,
-        successful_count: 2,
-        total_count: 2,
-        compile_time: 1.0,
-        upload_time: 0.5,
-        code_size: 100,
+      setFetchResponse('/api/fpb/inject/multi/stream', {
+        _stream: [
+          'data: {"type":"result","success":true,"successful_count":2,"total_count":2,"compile_time":1.0,"upload_time":0.5,"code_size":100}\n\n',
+        ],
       });
       setFetchResponse('/api/fpb/info', { success: true, slots: [] });
       await w.fpbInjectMulti();
@@ -449,9 +446,10 @@ module.exports = function (w) {
       w.FPBState.toolTerminal = mockTerm;
       browserGlobals.document.getElementById('patchSource').value =
         'void test() {}';
-      setFetchResponse('/api/fpb/inject/multi', {
-        success: false,
-        error: 'Compilation failed',
+      setFetchResponse('/api/fpb/inject/multi/stream', {
+        _stream: [
+          'data: {"type":"result","success":false,"error":"Compilation failed"}\n\n',
+        ],
       });
       await w.fpbInjectMulti();
       assertTrue(
@@ -459,6 +457,59 @@ module.exports = function (w) {
           (wr) => wr.msg && wr.msg.includes('Compilation failed'),
         ),
       );
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+
+    it('updates progress bar on compiling and injecting status events', async () => {
+      w.FPBState.isConnected = true;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      w.FPBState.slotStates = Array(8)
+        .fill()
+        .map(() => ({ occupied: false }));
+      browserGlobals.document.getElementById('patchSource').value =
+        'void test() {}';
+      const progressFill =
+        browserGlobals.document.getElementById('injectProgressFill');
+      const progressText =
+        browserGlobals.document.getElementById('injectProgressText');
+      setFetchResponse('/api/fpb/inject/multi/stream', {
+        _stream: [
+          'data: {"type":"status","stage":"compiling"}\n\n',
+          'data: {"type":"status","stage":"injecting","name":"func_a","total":2,"index":0}\n\n',
+          'data: {"type":"progress","percent":50}\n\n',
+          'data: {"type":"status","stage":"injecting","name":"func_b","total":2,"index":1}\n\n',
+          'data: {"type":"progress","percent":100}\n\n',
+          'data: {"type":"result","success":true,"successful_count":2,"total_count":2}\n\n',
+        ],
+      });
+      setFetchResponse('/api/fpb/info', { success: true, slots: [] });
+      await w.fpbInjectMulti();
+      assertTrue(
+        mockTerm._writes.some((wr) => wr.msg && wr.msg.includes('Injected')),
+      );
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+
+    it('handles exception during inject stream', async () => {
+      w.FPBState.isConnected = true;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      browserGlobals.document.getElementById('patchSource').value =
+        'void test() {}';
+      const origFetch = browserGlobals.fetch;
+      browserGlobals.fetch = async () => {
+        throw new Error('Network error');
+      };
+      global.fetch = browserGlobals.fetch;
+      await w.fpbInjectMulti();
+      assertTrue(
+        mockTerm._writes.some((wr) => wr.msg && wr.msg.includes('error')),
+      );
+      browserGlobals.fetch = origFetch;
+      global.fetch = origFetch;
       w.FPBState.toolTerminal = null;
       w.FPBState.isConnected = false;
     });
@@ -960,21 +1011,18 @@ module.exports = function (w) {
     it('is async function', () =>
       assertTrue(w.readSymbolFromDevice.constructor.name === 'AsyncFunction'));
 
-    it('calls POST /api/symbols/read', async () => {
-      setFetchResponse('/api/symbols/read', {
-        success: true,
-        name: 'g_cnt',
-        addr: '0x20000000',
-        size: 4,
-        hex_data: '05000000',
-        source: 'device',
+    it('calls POST /api/symbols/read/stream', async () => {
+      setFetchResponse('/api/symbols/read/stream', {
+        _stream: [
+          'data: {"type":"result","success":true,"name":"g_cnt","addr":"0x20000000","size":4,"hex_data":"05000000","source":"device"}\n\n',
+        ],
       });
       await w.readSymbolFromDevice('g_cnt');
       const calls = getFetchCalls();
       assertTrue(
         calls.some(
           (c) =>
-            c.url === '/api/symbols/read' &&
+            c.url === '/api/symbols/read/stream' &&
             c.options &&
             c.options.method === 'POST',
         ),
@@ -982,17 +1030,14 @@ module.exports = function (w) {
     });
 
     it('sends symbol name in request body', async () => {
-      setFetchResponse('/api/symbols/read', {
-        success: true,
-        name: 'g_cnt',
-        addr: '0x20000000',
-        size: 4,
-        hex_data: '05000000',
-        source: 'device',
+      setFetchResponse('/api/symbols/read/stream', {
+        _stream: [
+          'data: {"type":"result","success":true,"name":"g_cnt","addr":"0x20000000","size":4,"hex_data":"05000000","source":"device"}\n\n',
+        ],
       });
       await w.readSymbolFromDevice('g_cnt');
       const calls = getFetchCalls();
-      const readCall = calls.find((c) => c.url === '/api/symbols/read');
+      const readCall = calls.find((c) => c.url === '/api/symbols/read/stream');
       assertTrue(readCall !== undefined);
       const body = JSON.parse(readCall.options.body);
       assertEqual(body.name, 'g_cnt');
@@ -2748,13 +2793,10 @@ module.exports = function (w) {
       browserGlobals.document.getElementById('patchSource').value =
         'void test() {}';
       browserGlobals.document.getElementById('patchMode').value = 'trampoline';
-      setFetchResponse('/api/fpb/inject/multi', {
-        success: true,
-        successful_count: 2,
-        total_count: 2,
-        compile_time: 1.0,
-        upload_time: 0.5,
-        code_size: 200,
+      setFetchResponse('/api/fpb/inject/multi/stream', {
+        _stream: [
+          'data: {"type":"result","success":true,"successful_count":2,"total_count":2,"compile_time":1.0,"upload_time":0.5,"code_size":200}\n\n',
+        ],
       });
       setFetchResponse('/api/fpb/info', { success: true, slots: [] });
       await w.fpbInjectMulti();

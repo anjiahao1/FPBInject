@@ -10,14 +10,14 @@ Provides endpoints for FPB injection, unpatch, and device info.
 All serial operations are executed in the device worker thread for thread safety.
 """
 
-import json
 import logging
 import os
 import queue
 import threading
 
-from flask import Blueprint, Response, jsonify, request
+from flask import Blueprint, jsonify, request
 
+from app.utils.sse import sse_response
 from core.state import state
 from services.device_worker import run_in_device_worker
 
@@ -346,6 +346,74 @@ def api_fpb_inject_multi():
     return jsonify({"success": success, **inject_result})
 
 
+@bp.route("/fpb/inject/multi/stream", methods=["POST"])
+def api_fpb_inject_multi_stream():
+    """Multi-function injection with per-function + per-chunk SSE progress."""
+    log_info, log_success, log_error, _, get_fpb_inject, _ = _get_helpers()
+
+    data = request.json or {}
+    source_content = data.get("source_content")
+    patch_mode = data.get("patch_mode", state.device.patch_mode)
+    source_ext = data.get("source_ext", ".c")
+
+    if not source_content:
+        return jsonify({"success": False, "error": "Source content not provided"})
+
+    progress_queue = queue.Queue()
+
+    def progress_callback(uploaded, total):
+        progress_queue.put(
+            {
+                "type": "progress",
+                "uploaded": uploaded,
+                "total": total,
+                "percent": round((uploaded / total) * 100, 1) if total > 0 else 0,
+            }
+        )
+
+    def status_callback(event):
+        progress_queue.put({"type": "status", **event})
+
+    def inject_task():
+        fpb = get_fpb_inject()
+        log_info(f"Starting multi-injection stream (mode: {patch_mode})")
+
+        def do_inject_multi():
+            fpb.enter_fl_mode()
+            try:
+                progress_queue.put({"type": "status", "stage": "compiling"})
+
+                success, result = fpb.inject_multi(
+                    source_content=source_content,
+                    patch_mode=patch_mode,
+                    source_ext=source_ext,
+                    progress_callback=progress_callback,
+                    status_callback=status_callback,
+                )
+
+                if success:
+                    sc = result.get("successful_count", 0)
+                    tc = result.get("total_count", 0)
+                    log_success(f"Multi-injection complete: {sc}/{tc} functions")
+                    progress_queue.put({"type": "result", "success": True, **result})
+                else:
+                    progress_queue.put({"type": "result", "success": False, **result})
+            finally:
+                fpb.exit_fl_mode()
+                progress_queue.put(None)
+
+        if not run_in_device_worker(state.device, do_inject_multi, timeout=120.0):
+            progress_queue.put(
+                {"type": "result", "success": False, "error": "Device worker timeout"}
+            )
+            progress_queue.put(None)
+
+    thread = threading.Thread(target=inject_task, daemon=True)
+    thread.start()
+
+    return sse_response(progress_queue)
+
+
 @bp.route("/fpb/inject/stream", methods=["POST"])
 def api_fpb_inject_stream():
     """Perform code injection with streaming progress via SSE."""
@@ -417,22 +485,4 @@ def api_fpb_inject_stream():
     thread = threading.Thread(target=inject_task, daemon=True)
     thread.start()
 
-    def generate():
-        while True:
-            try:
-                item = progress_queue.get(timeout=30)
-                if item is None:
-                    break
-                yield f"data: {json.dumps(item)}\n\n"
-            except queue.Empty:
-                yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
-
-    return Response(
-        generate(),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "close",  # Changed from keep-alive to close SSE connection immediately
-            "X-Accel-Buffering": "no",
-        },
-    )
+    return sse_response(progress_queue)

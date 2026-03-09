@@ -798,17 +798,47 @@ async function readSymbolFromDevice(symName, deref) {
   };
 
   try {
-    const res = await fetch('/api/symbols/read', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: symName, deref: !!deref }),
-    });
-    const data = await res.json();
+    const result = await consumeSSEStream(
+      '/api/symbols/read/stream',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: symName, deref: !!deref }),
+      },
+      {
+        onStatus(ev) {
+          if (progressText) {
+            progressText.textContent = t(
+              'symbols.reading_symbol_size',
+              `Reading ${ev.symbol} (${ev.size} bytes)...`,
+              { name: ev.symbol, size: ev.size },
+            );
+          }
+          if (progressFill) progressFill.style.width = '0%';
+        },
+        onProgress(ev) {
+          if (progressFill) progressFill.style.width = `${ev.percent}%`;
+          if (progressText) {
+            progressText.textContent = t(
+              'symbols.reading_progress',
+              `Reading ${symName} ${ev.percent.toFixed(0)}%`,
+              {
+                name: symName,
+                percent: ev.percent.toFixed(0),
+                read: ev.read,
+                total: ev.total,
+              },
+            );
+          }
+        },
+      },
+    );
 
-    if (!data.success) {
-      log.error(`Read failed: ${data.error}`);
+    const data = result;
+    if (!data || !data.success) {
+      log.error(`Read failed: ${data?.error || 'Unknown error'}`);
       if (statusEl)
-        statusEl.textContent = `${t('symbols.error', 'Error')}: ${data.error}`;
+        statusEl.textContent = `${t('symbols.error', 'Error')}: ${data?.error}`;
       if (progressFill) progressFill.style.background = '#f44336';
       setTimeout(_hideProgress, 2000);
       return;

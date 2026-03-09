@@ -163,6 +163,7 @@ const modules = [
   'core/logs.js',
   'core/slots.js',
   'core/config-schema.js',
+  'core/sse.js',
   'ui/sash.js',
   'ui/sidebar.js',
   'features/fpb.js',

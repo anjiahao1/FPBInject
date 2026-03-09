@@ -419,6 +419,152 @@ class TestFPBInjectStreamRoute(TestFPBRoutesBase):
         self.assertFalse(data["success"])
         self.assertIn("Target function", data["error"])
 
+    @patch("app.routes.fpb._get_helpers")
+    def test_inject_stream_success_emits_sse(self, mock_helpers):
+        """Test inject_stream returns SSE events on success."""
+        mock_fpb = Mock()
+        mock_fpb.enter_fl_mode = Mock()
+        mock_fpb.exit_fl_mode = Mock()
+
+        def fake_inject(**kwargs):
+            cb = kwargs.get("progress_callback")
+            if cb:
+                cb(50, 100)
+                cb(100, 100)
+            return True, {"slot": 0, "code_size": 64}
+
+        mock_fpb.inject.side_effect = fake_inject
+        mock_helpers.return_value = make_mock_helpers(mock_fpb)
+
+        response = self.client.post(
+            "/api/fpb/inject/stream",
+            json={
+                "source_content": "/* FPB_INJECT */\nvoid f() {}",
+                "target_func": "original_f",
+            },
+        )
+
+        self.assertIn("text/event-stream", response.content_type)
+        body = response.get_data(as_text=True)
+        events = _parse_sse_events(body)
+
+        types = [e["type"] for e in events]
+        self.assertIn("status", types)
+        self.assertIn("result", types)
+
+        result_evt = next(e for e in events if e["type"] == "result")
+        self.assertTrue(result_evt["success"])
+
+
+class TestFPBInjectMultiStreamRoute(TestFPBRoutesBase):
+    """FPB inject/multi/stream route tests"""
+
+    @patch("app.routes.fpb._get_helpers")
+    def test_multi_stream_no_source(self, mock_helpers):
+        """Test inject/multi/stream without source content."""
+        mock_helpers.return_value = make_mock_helpers(Mock())
+
+        response = self.client.post("/api/fpb/inject/multi/stream", json={})
+        data = json.loads(response.data)
+
+        self.assertFalse(data["success"])
+        self.assertIn("Source content", data["error"])
+
+    @patch("app.routes.fpb._get_helpers")
+    def test_multi_stream_success_emits_sse(self, mock_helpers):
+        """Test inject/multi/stream returns SSE events with progress."""
+        mock_fpb = Mock()
+        mock_fpb.enter_fl_mode = Mock()
+        mock_fpb.exit_fl_mode = Mock()
+
+        def fake_inject_multi(**kwargs):
+            status_cb = kwargs.get("status_callback")
+            progress_cb = kwargs.get("progress_callback")
+            if status_cb:
+                status_cb(
+                    {"stage": "injecting", "index": 0, "name": "func_a", "total": 2}
+                )
+            if progress_cb:
+                progress_cb(32, 64)
+                progress_cb(64, 64)
+            if status_cb:
+                status_cb(
+                    {"stage": "injecting", "index": 1, "name": "func_b", "total": 2}
+                )
+            if progress_cb:
+                progress_cb(32, 64)
+                progress_cb(64, 64)
+            return True, {"successful_count": 2, "total_count": 2}
+
+        mock_fpb.inject_multi.side_effect = fake_inject_multi
+        mock_helpers.return_value = make_mock_helpers(mock_fpb)
+
+        response = self.client.post(
+            "/api/fpb/inject/multi/stream",
+            json={
+                "source_content": "/* FPB_INJECT */\nvoid func_a() {}\nvoid func_b() {}"
+            },
+        )
+
+        self.assertIn("text/event-stream", response.content_type)
+        body = response.get_data(as_text=True)
+        events = _parse_sse_events(body)
+
+        types = [e["type"] for e in events]
+        self.assertIn("status", types)
+        self.assertIn("progress", types)
+        self.assertIn("result", types)
+
+        progress_events = [e for e in events if e["type"] == "progress"]
+        self.assertGreater(len(progress_events), 0)
+        self.assertIn("percent", progress_events[0])
+
+        result_evt = next(e for e in events if e["type"] == "result")
+        self.assertTrue(result_evt["success"])
+        self.assertEqual(result_evt["successful_count"], 2)
+
+    @patch("app.routes.fpb._get_helpers")
+    def test_multi_stream_worker_timeout(self, mock_helpers):
+        """Test inject/multi/stream handles device worker timeout."""
+        mock_helpers.return_value = make_mock_helpers(Mock())
+
+        # Make run_in_device_worker return False (timeout)
+        self.worker_patcher.stop()
+        timeout_patcher = patch(
+            "app.routes.fpb.run_in_device_worker", return_value=False
+        )
+        timeout_patcher.start()
+
+        try:
+            response = self.client.post(
+                "/api/fpb/inject/multi/stream",
+                json={"source_content": "void f() {}"},
+            )
+
+            body = response.get_data(as_text=True)
+            events = _parse_sse_events(body)
+
+            result_evt = next((e for e in events if e["type"] == "result"), None)
+            self.assertIsNotNone(result_evt)
+            self.assertFalse(result_evt["success"])
+            self.assertIn("timeout", result_evt["error"].lower())
+        finally:
+            timeout_patcher.stop()
+            self.mock_worker = self.worker_patcher.start()
+
+
+def _parse_sse_events(body):
+    """Parse SSE text body into list of dicts."""
+    events = []
+    for line in body.split("\n"):
+        line = line.strip()
+        if line.startswith("data: "):
+            try:
+                events.append(json.loads(line[6:]))
+            except json.JSONDecodeError:
+                pass
+    return events
+
 
 if __name__ == "__main__":
     unittest.main()

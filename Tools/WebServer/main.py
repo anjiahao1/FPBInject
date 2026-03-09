@@ -231,7 +231,7 @@ def main():
     # Configure logging early
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        format="%(asctime)s [TID:%(thread)d] [%(levelname)s] %(name)s: %(message)s",
     )
 
     # Reduce verbosity of Flask/Werkzeug request logs
