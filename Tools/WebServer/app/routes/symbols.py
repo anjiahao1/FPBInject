@@ -182,11 +182,13 @@ def _decode_field_value(raw_bytes: bytes, type_name: str):
     is_int = any(kw in type_lower for kw in _INT_TYPE_KEYWORDS)
     if is_int and size <= 8:
         val = int.from_bytes(raw_bytes, "little")
-        # Signed check: type doesn't start with 'u'/'U' and doesn't contain 'uint'
+        # Signed check: type doesn't start with 'u'/'U', doesn't contain 'uint',
+        # and doesn't contain 'unsigned' (handles "long unsigned int" from DWARF)
         if (
             not type_name.startswith("u")
             and not type_name.startswith("U")
             and "uint" not in type_name
+            and "unsigned" not in type_name
         ):
             max_signed = 1 << (size * 8 - 1)
             if val >= max_signed:
@@ -796,6 +798,7 @@ def api_get_symbol_value():
         sym_info.get("type", "other") if isinstance(sym_info, dict) else "function"
     )
     section = sym_info.get("section", "") if isinstance(sym_info, dict) else ""
+    c_type = sym_info.get("c_type") if isinstance(sym_info, dict) else None
     is_pointer = (
         sym_info.get("is_pointer", False) if isinstance(sym_info, dict) else False
     )
@@ -845,6 +848,14 @@ def api_get_symbol_value():
 
     logger.info(f"[value] Total for '{sym_name}': {time.time() - t_start:.2f}s")
 
+    # Decode scalar value from hex_data using c_type when no struct layout
+    decoded_value = None
+    if hex_data and c_type and not struct_layout and not is_pointer:
+        raw = bytes.fromhex(hex_data)
+        decoded_value = _decode_field_value(raw, c_type)
+        if decoded_value is None:
+            decoded_value = _decode_field_value_fallback(raw, c_type)
+
     resp = {
         "success": True,
         "name": sym_name,
@@ -856,6 +867,10 @@ def api_get_symbol_value():
         "struct_layout": struct_layout,
         "gdb_values": gdb_values,
     }
+    if c_type:
+        resp["c_type"] = c_type
+    if decoded_value is not None:
+        resp["decoded_value"] = decoded_value
     if is_pointer:
         resp["is_pointer"] = True
         resp["pointer_target"] = pointer_target
@@ -897,6 +912,7 @@ def api_read_symbol_from_device():
     pointer_target = (
         sym_info.get("pointer_target") if isinstance(sym_info, dict) else None
     )
+    c_type = sym_info.get("c_type") if isinstance(sym_info, dict) else None
     if size <= 0:
         return jsonify(
             {"success": False, "error": f"Symbol '{sym_name}' has unknown size"}
@@ -934,6 +950,14 @@ def api_read_symbol_from_device():
                 if struct_layout:
                     gdb_values = _decode_struct_values(struct_layout, hex_data)
 
+        # Decode scalar value for non-struct, non-pointer types
+        decoded_value = None
+        if hex_data and c_type and not struct_layout and not is_pointer:
+            raw = bytes.fromhex(hex_data)
+            decoded_value = _decode_field_value(raw, c_type)
+            if decoded_value is None:
+                decoded_value = _decode_field_value_fallback(raw, c_type)
+
         resp = {
             "success": True,
             "name": sym_name,
@@ -944,6 +968,10 @@ def api_read_symbol_from_device():
             "gdb_values": gdb_values,
             "source": "device",
         }
+        if c_type:
+            resp["c_type"] = c_type
+        if decoded_value is not None:
+            resp["decoded_value"] = decoded_value
         if is_pointer:
             resp["is_pointer"] = True
             resp["pointer_target"] = pointer_target
@@ -1038,6 +1066,7 @@ def api_read_symbol_stream():
     pointer_target = (
         sym_info.get("pointer_target") if isinstance(sym_info, dict) else None
     )
+    c_type = sym_info.get("c_type") if isinstance(sym_info, dict) else None
     if size <= 0:
         return jsonify(
             {"success": False, "error": f"Symbol '{sym_name}' has unknown size"}
@@ -1141,6 +1170,14 @@ def api_read_symbol_stream():
                     if struct_layout:
                         gdb_values = _decode_struct_values(struct_layout, hex_data)
 
+            # Decode scalar value for non-struct, non-pointer types
+            decoded_value = None
+            if hex_data and c_type and not struct_layout and not is_pointer:
+                raw = bytes.fromhex(hex_data)
+                decoded_value = _decode_field_value(raw, c_type)
+                if decoded_value is None:
+                    decoded_value = _decode_field_value_fallback(raw, c_type)
+
             resp = {
                 "type": "result",
                 "success": True,
@@ -1152,6 +1189,10 @@ def api_read_symbol_stream():
                 "gdb_values": gdb_values,
                 "source": "device",
             }
+            if c_type:
+                resp["c_type"] = c_type
+            if decoded_value is not None:
+                resp["decoded_value"] = decoded_value
             if is_pointer:
                 resp["is_pointer"] = True
                 resp["pointer_target"] = pointer_target

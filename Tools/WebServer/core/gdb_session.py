@@ -540,15 +540,17 @@ class GDBSession:
                 if ptype_out and re.match(r"type\s*=\s*const\b", ptype_out):
                     sym_type = "const"
 
-        # Detect pointer types via whatis (e.g. "type = lv_disp_t *")
+        # Detect pointer types and C type name via whatis
         is_pointer = False
         pointer_target = None
+        c_type = None
         if sym_type in ("variable", "const"):
             whatis_out = self._execute_cli(f"whatis {query_name}")
             if whatis_out:
                 wm = re.match(r"type\s*=\s*(.+)", whatis_out.strip())
                 if wm:
                     raw_type = wm.group(1).strip()
+                    c_type = raw_type
                     # Pointer if type ends with '*' (but not function pointer)
                     if raw_type.endswith("*") and "(" not in raw_type:
                         is_pointer = True
@@ -557,7 +559,7 @@ class GDBSession:
         elapsed = time.time() - t_start
         logger.info(
             f"[GDB] lookup_symbol done: '{sym_name}' -> "
-            f"0x{addr:08X} size={size} type={sym_type}"
+            f"0x{addr:08X} size={size} type={sym_type} c_type={c_type}"
             f"{' ptr->' + pointer_target if is_pointer else ''}"
             f" ({elapsed:.3f}s)"
         )
@@ -568,6 +570,8 @@ class GDBSession:
             "type": sym_type,
             "section": section,
         }
+        if c_type:
+            result["c_type"] = c_type
         if is_pointer:
             result["is_pointer"] = True
             result["pointer_target"] = pointer_target

@@ -171,10 +171,12 @@ function _renderSymbolValueContent(data, isConst) {
     : t('symbols.read_write', 'Read-Write');
   const isBss = data.section && data.section.startsWith('.bss');
 
-  // For pointer types, show the pointer type in the header
+  // Show C type in the header (from GDB whatis)
   const typeDisplay = data.is_pointer
     ? `${_escapeHtml(data.pointer_target || '?')} *`
-    : '';
+    : data.c_type
+      ? _escapeHtml(data.c_type)
+      : '';
 
   let headerHtml = `
     <div class="sym-viewer-header">
@@ -243,6 +245,32 @@ function _renderSymbolValueContent(data, isConst) {
       <code class="sym-pointer-addr">${ptrValue}</code>
       ${ptrValue === '0x00000000' ? `<span class="sym-pointer-null">NULL</span>` : ''}
     </div>`;
+  }
+
+  // Scalar value decoded by backend (non-struct, non-pointer)
+  // Render as a single tree node to reuse the struct tree style
+  if (
+    data.decoded_value !== undefined &&
+    data.decoded_value !== null &&
+    !data.is_pointer &&
+    !(data.struct_layout && data.struct_layout.length > 0)
+  ) {
+    const scalarLayout = [
+      {
+        name: data.name,
+        offset: 0,
+        size: data.size,
+        type_name: data.c_type || '',
+      },
+    ];
+    const scalarGdbValues = { [data.name]: data.decoded_value };
+    bodyHtml += _renderStructTree(
+      scalarLayout,
+      data.hex_data,
+      isBss,
+      scalarGdbValues,
+      data.name,
+    );
   }
 
   // Struct tree view (for non-pointer structs, or for deref data)
@@ -667,11 +695,12 @@ function _decodeFieldValue(hexData, offset, size, typeName) {
     for (let i = 0; i < bytes.length; i++) {
       val += bytes[i] * 256 ** i;
     }
-    // Check for signed types
+    // Check for signed types (handle "unsigned long", "long unsigned int", etc.)
     if (
       !typeName.startsWith('u') &&
       !typeName.startsWith('U') &&
-      !typeName.includes('uint')
+      !typeName.includes('uint') &&
+      !typeName.includes('unsigned')
     ) {
       const maxSigned = 2 ** (size * 8 - 1);
       if (val >= maxSigned) val -= 2 ** (size * 8);
