@@ -47,12 +47,16 @@ def scan_directory(root_dir):
     results = {}
 
     # Directories and files to exclude (i18n locale files are expected to have Chinese)
-    exclude_dirs = {"locales", "node_modules", "__pycache__", ".git"}
+    exclude_dirs = {"locales", "node_modules", "__pycache__", ".git", "coverage"}
     exclude_files = {
         "zh-CN.js",
         "zh-TW.js",
         "config_schema.py",
     }  # config_schema.py has language option labels
+
+    # Allowlist: patterns that are acceptable Chinese text
+    # Language display names should always show in their native script
+    allowlist = {"简体中文", "繁體中文"}
 
     for root, dirs, files in os.walk(root_dir):
         # Skip excluded directories
@@ -66,6 +70,8 @@ def scan_directory(root_dir):
             if file.endswith((".js", ".html", ".py")):
                 file_path = os.path.join(root, file)
                 findings = scan_file(file_path)
+                # Filter out allowlisted text
+                findings = [f for f in findings if f["text"] not in allowlist]
                 if findings:
                     results[file_path] = findings
 
@@ -85,7 +91,7 @@ def main():
 
     if not results:
         print("No Chinese text found in .js, .html, and .py files.")
-        return
+        return 0
 
     total_files = len(results)
     total_findings = sum(len(findings) for findings in results.values())
@@ -110,6 +116,7 @@ def main():
     print(
         f"Summary: {total_files} files with Chinese text, {total_findings} instances total."
     )
+    return total_findings
 
 
 if __name__ == "__main__":

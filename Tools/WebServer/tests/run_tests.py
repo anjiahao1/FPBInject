@@ -35,8 +35,11 @@ def run_scan_chinese():
 
     from scan_chinese import main as scan_main
 
-    scan_main()
-    return True  # Scanner always succeeds, just reports findings
+    count = scan_main()
+    if count > 0:
+        print(f"\n⚠️  Found {count} hardcoded Chinese text instances!")
+        return False
+    return True
 
 
 def run_api_check():
