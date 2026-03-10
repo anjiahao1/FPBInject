@@ -15,6 +15,7 @@ import os
 import threading
 import time
 
+from core.elf_utils import get_memory_regions
 from core.gdb_bridge import GDBRSPBridge
 from core.gdb_session import GDBSession
 from core.state import ToolLogHandler
@@ -80,6 +81,7 @@ def start_gdb(state, read_memory_fn=None, write_memory_fn=None) -> bool:
             write_memory_fn=write_memory_fn,
             listen_port=DEFAULT_RSP_PORT,
         )
+        _apply_elf_memory_regions(bridge, elf_path)
         port = bridge.start()
         state.gdb_bridge = bridge
 
@@ -145,6 +147,24 @@ def is_gdb_available(state) -> bool:
     return state.gdb_session is not None and state.gdb_session.is_alive
 
 
+def _apply_elf_memory_regions(bridge, elf_path):
+    """Parse ELF PT_LOAD segments and apply as bridge memory regions.
+
+    Falls back to DEFAULT_MEMORY_REGIONS if ELF parsing fails or
+    no PT_LOAD segments are found.
+    """
+    if not elf_path:
+        return
+
+    regions = get_memory_regions(elf_path)
+    if regions:
+        bridge.set_memory_regions(regions)
+    else:
+        logger.info(
+            "Using default ARM Cortex-M memory regions (ELF parse returned none)"
+        )
+
+
 # ------------------------------------------------------------------
 # External GDB Server (for CLI / IDE connections)
 # ------------------------------------------------------------------
@@ -195,6 +215,7 @@ def start_external_gdb_server(state, read_memory_fn=None, write_memory_fn=None) 
             write_memory_fn=write_memory_fn,
             listen_port=port,
         )
+        _apply_elf_memory_regions(bridge, device.elf_path)
         actual_port = bridge.start()
         state.external_gdb_bridge = bridge
         logger.info(f"External GDB RSP server listening on port {actual_port}")

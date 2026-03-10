@@ -15,8 +15,9 @@ Note: Symbol query/search/struct-layout are handled by GDB (see gdb_session.py).
 import logging
 import os
 import re
+import struct
 import subprocess
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from utils.toolchain import get_tool_path, get_subprocess_env
 
@@ -50,6 +51,158 @@ _NM_TYPE_MAP = {
 def _nm_type_to_category(nm_type: str) -> str:
     """Convert nm symbol type code to category string."""
     return _NM_TYPE_MAP.get(nm_type, "other")
+
+
+# ELF constants
+_ELF_MAGIC = b"\x7fELF"
+_ELFCLASS32 = 1
+_ELFCLASS64 = 2
+_PT_LOAD = 1
+_PF_R = 4
+_PF_W = 2
+_PF_X = 1
+
+# Margin added around each PT_LOAD segment to accommodate stack/heap growth
+_REGION_MARGIN = 0x1000  # 4KB
+
+
+def get_memory_regions(elf_path: str) -> List[Tuple[int, int]]:
+    """Extract memory regions from ELF PT_LOAD program headers.
+
+    Parses the ELF file directly (no external tools needed) and returns
+    the virtual address ranges covered by loadable segments. These represent
+    the actual memory footprint of the firmware.
+
+    Args:
+        elf_path: Path to the ELF file.
+
+    Returns:
+        List of (start_addr, end_addr) tuples, sorted by start address.
+        Returns empty list on error.
+    """
+    try:
+        with open(elf_path, "rb") as f:
+            # Read and validate ELF identification (first 16 bytes)
+            e_ident = f.read(16)
+            if len(e_ident) < 16 or e_ident[:4] != _ELF_MAGIC:
+                logger.warning(f"Not a valid ELF file: {elf_path}")
+                return []
+
+            ei_class = e_ident[4]
+            if ei_class == _ELFCLASS32:
+                regions = _parse_elf32_phdrs(f)
+            elif ei_class == _ELFCLASS64:
+                regions = _parse_elf64_phdrs(f)
+            else:
+                logger.warning(f"Unknown ELF class: {ei_class}")
+                return []
+
+        if not regions:
+            logger.info(f"No PT_LOAD segments found in {os.path.basename(elf_path)}")
+            return []
+
+        # Merge overlapping/adjacent regions and add margin
+        merged = _merge_regions(regions)
+
+        logger.info(
+            f"ELF memory regions from {os.path.basename(elf_path)}: "
+            f"{len(merged)} region(s)"
+        )
+        for start, end in merged:
+            logger.info(f"  0x{start:08X} - 0x{end:08X} ({(end - start) // 1024}KB)")
+
+        return merged
+
+    except Exception as e:
+        logger.warning(f"Failed to parse ELF memory regions: {e}")
+        return []
+
+
+def _parse_elf32_phdrs(f) -> List[Tuple[int, int]]:
+    """Parse 32-bit ELF program headers, return PT_LOAD regions."""
+    # ELF32 header: e_phoff at offset 28 (4 bytes),
+    # e_phentsize at 42 (2 bytes), e_phnum at 44 (2 bytes)
+    f.seek(28)
+    data = f.read(4)
+    e_phoff = struct.unpack_from("<I", data)[0]
+
+    f.seek(42)
+    data = f.read(4)
+    e_phentsize, e_phnum = struct.unpack_from("<HH", data)
+
+    regions = []
+    for i in range(e_phnum):
+        f.seek(e_phoff + i * e_phentsize)
+        # Elf32_Phdr: p_type(4) p_offset(4) p_vaddr(4) p_paddr(4)
+        #             p_filesz(4) p_memsz(4) p_flags(4) p_align(4)
+        phdr = f.read(32)
+        if len(phdr) < 32:
+            break
+        p_type, _, p_vaddr, _, _, p_memsz, p_flags, _ = struct.unpack_from(
+            "<IIIIIIII", phdr
+        )
+        if p_type == _PT_LOAD and p_memsz > 0:
+            regions.append((p_vaddr, p_vaddr + p_memsz))
+
+    return regions
+
+
+def _parse_elf64_phdrs(f) -> List[Tuple[int, int]]:
+    """Parse 64-bit ELF program headers, return PT_LOAD regions."""
+    # ELF64 header: e_phoff at offset 32 (8 bytes),
+    # e_phentsize at 54 (2 bytes), e_phnum at 56 (2 bytes)
+    f.seek(32)
+    data = f.read(8)
+    e_phoff = struct.unpack_from("<Q", data)[0]
+
+    f.seek(54)
+    data = f.read(4)
+    e_phentsize, e_phnum = struct.unpack_from("<HH", data)
+
+    regions = []
+    for i in range(e_phnum):
+        f.seek(e_phoff + i * e_phentsize)
+        # Elf64_Phdr: p_type(4) p_flags(4) p_offset(8) p_vaddr(8)
+        #             p_paddr(8) p_filesz(8) p_memsz(8) p_align(8)
+        phdr = f.read(56)
+        if len(phdr) < 56:
+            break
+        p_type, p_flags = struct.unpack_from("<II", phdr, 0)
+        p_vaddr = struct.unpack_from("<Q", phdr, 16)[0]
+        p_memsz = struct.unpack_from("<Q", phdr, 40)[0]
+        if p_type == _PT_LOAD and p_memsz > 0:
+            regions.append((p_vaddr, p_vaddr + p_memsz))
+
+    return regions
+
+
+def _merge_regions(
+    regions: List[Tuple[int, int]], margin: int = _REGION_MARGIN
+) -> List[Tuple[int, int]]:
+    """Sort, expand by margin, and merge overlapping/adjacent regions."""
+    if not regions:
+        return []
+
+    # Expand each region by margin, clamp to 0
+    expanded = []
+    for start, end in regions:
+        exp_start = max(0, start - margin)
+        exp_end = end + margin
+        expanded.append((exp_start, exp_end))
+
+    # Sort by start address
+    expanded.sort()
+
+    # Merge overlapping
+    merged = [expanded[0]]
+    for start, end in expanded[1:]:
+        prev_start, prev_end = merged[-1]
+        if start <= prev_end:
+            merged[-1] = (prev_start, max(prev_end, end))
+        else:
+            merged.append((start, end))
+
+    return merged
 
 
 def get_symbols(elf_path: str, toolchain_path: Optional[str] = None) -> Dict[str, dict]:

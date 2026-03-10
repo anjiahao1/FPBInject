@@ -12,6 +12,7 @@ from core.gdb_manager import (
     start_external_gdb_server,
     stop_external_gdb_server,
     get_external_gdb_port,
+    _apply_elf_memory_regions,
     _create_serial_memory_callbacks,
 )
 
@@ -372,6 +373,35 @@ class TestSerialMemoryCallbacks(unittest.TestCase):
         ok, msg = write_fn(0x20000000, b"\x01")
         self.assertFalse(ok)
         self.assertIn("timeout", msg.lower())
+
+
+class TestApplyElfMemoryRegions(unittest.TestCase):
+    """Test _apply_elf_memory_regions helper."""
+
+    @patch(
+        "core.gdb_manager.get_memory_regions", return_value=[(0x08000000, 0x08100000)]
+    )
+    def test_applies_elf_regions(self, mock_get):
+        bridge = MagicMock()
+        _apply_elf_memory_regions(bridge, "/path/to/firmware.elf")
+        mock_get.assert_called_once_with("/path/to/firmware.elf")
+        bridge.set_memory_regions.assert_called_once_with([(0x08000000, 0x08100000)])
+
+    @patch("core.gdb_manager.get_memory_regions", return_value=[])
+    def test_empty_regions_keeps_default(self, mock_get):
+        bridge = MagicMock()
+        _apply_elf_memory_regions(bridge, "/path/to/firmware.elf")
+        bridge.set_memory_regions.assert_not_called()
+
+    def test_no_elf_path(self):
+        bridge = MagicMock()
+        _apply_elf_memory_regions(bridge, "")
+        bridge.set_memory_regions.assert_not_called()
+
+    def test_none_elf_path(self):
+        bridge = MagicMock()
+        _apply_elf_memory_regions(bridge, None)
+        bridge.set_memory_regions.assert_not_called()
 
 
 if __name__ == "__main__":
