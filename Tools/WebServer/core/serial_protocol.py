@@ -563,7 +563,9 @@ class FPBProtocol:
         while offset < length:
             n = min(bytes_per_chunk, length - offset)
             chunk_addr = addr + offset
-            cmd = f"-c read --addr 0x{chunk_addr:X} --len {n}"
+            # CRC covers: addr(4B LE) + len(4B LE) for request verification
+            crc_val = crc16_update(0xFFFF, struct.pack("<II", chunk_addr, n))
+            cmd = f"-c read --addr 0x{chunk_addr:X} --len {n} --crc 0x{crc_val:04X}"
             last_error = ""
 
             for attempt in range(max_retries + 1):
@@ -636,10 +638,17 @@ class FPBProtocol:
 
         return True, f"Write {total} bytes OK"
 
+    def _patch_crc(self, comp: int, orig: int, target: int) -> int:
+        """Compute CRC for patch commands: comp(4B LE) + orig(4B LE) + target(4B LE)."""
+        return crc16_update(
+            0xFFFF, struct.pack("<III", comp, orig, target)
+        )
+
     def patch(self, comp: int, orig: int, target: int) -> Tuple[bool, str]:
         """Set FPB patch (direct mode)."""
         try:
-            cmd = f"-c patch --comp {comp} --orig 0x{orig:X} --target 0x{target:X}"
+            crc_val = self._patch_crc(comp, orig, target)
+            cmd = f"-c patch --comp {comp} --orig 0x{orig:X} --target 0x{target:X} --crc 0x{crc_val:04X}"
             resp = self.send_cmd(cmd)
             result = self.parse_response(resp)
             return result.get("ok", False), result.get("msg", "")
@@ -649,7 +658,8 @@ class FPBProtocol:
     def tpatch(self, comp: int, orig: int, target: int) -> Tuple[bool, str]:
         """Set trampoline patch."""
         try:
-            cmd = f"-c tpatch --comp {comp} --orig 0x{orig:X} --target 0x{target:X}"
+            crc_val = self._patch_crc(comp, orig, target)
+            cmd = f"-c tpatch --comp {comp} --orig 0x{orig:X} --target 0x{target:X} --crc 0x{crc_val:04X}"
             resp = self.send_cmd(cmd)
             result = self.parse_response(resp)
             return result.get("ok", False), result.get("msg", "")
@@ -659,7 +669,8 @@ class FPBProtocol:
     def dpatch(self, comp: int, orig: int, target: int) -> Tuple[bool, str]:
         """Set DebugMonitor patch."""
         try:
-            cmd = f"-c dpatch --comp {comp} --orig 0x{orig:X} --target 0x{target:X}"
+            crc_val = self._patch_crc(comp, orig, target)
+            cmd = f"-c dpatch --comp {comp} --orig 0x{orig:X} --target 0x{target:X} --crc 0x{crc_val:04X}"
             resp = self.send_cmd(cmd)
             result = self.parse_response(resp)
             return result.get("ok", False), result.get("msg", "")

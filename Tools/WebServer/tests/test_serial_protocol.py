@@ -465,6 +465,91 @@ class TestEnhancedCRC(unittest.TestCase):
         resp_old = f"[FLOK] READ 4 bytes crc=0x{old_crc:04X} data={b64}"
         self.assertIsNone(self.protocol._parse_read_response(resp_old, addr=addr))
 
+    def test_read_cmd_includes_crc(self):
+        """read_memory must send --crc covering addr + len."""
+        import re
+        import struct
+        import base64
+        from utils.crc import crc16_update
+
+        addr = 0x20000100
+        length = 16
+        raw = b"\xdd" * length
+        b64 = base64.b64encode(raw).decode()
+        resp_crc = crc16_update(0xFFFF, struct.pack("<II", addr, length))
+        resp_crc = crc16_update(resp_crc, raw)
+
+        self.protocol.send_cmd = MagicMock(
+            return_value=f"[FLOK] READ {length} bytes crc=0x{resp_crc:04X} data={b64}"
+        )
+
+        self.protocol.read_memory(addr, length)
+
+        cmd_str = self.protocol.send_cmd.call_args[0][0]
+        m = re.search(r"--crc 0x([0-9A-Fa-f]+)", cmd_str)
+        self.assertIsNotNone(m, "read command must include --crc")
+        sent_crc = int(m.group(1), 16)
+
+        expected = crc16_update(0xFFFF, struct.pack("<II", addr, length))
+        self.assertEqual(sent_crc, expected)
+
+    def test_patch_cmd_includes_crc(self):
+        """patch must send --crc covering comp + orig + target."""
+        import re
+        import struct
+        from utils.crc import crc16_update
+
+        self.protocol.send_cmd = MagicMock(return_value="[FLOK] Patch 0")
+
+        comp, orig, target = 0, 0x08001000, 0x20002000
+        self.protocol.patch(comp, orig, target)
+
+        cmd_str = self.protocol.send_cmd.call_args[0][0]
+        m = re.search(r"--crc 0x([0-9A-Fa-f]+)", cmd_str)
+        self.assertIsNotNone(m, "patch command must include --crc")
+        sent_crc = int(m.group(1), 16)
+
+        expected = crc16_update(0xFFFF, struct.pack("<III", comp, orig, target))
+        self.assertEqual(sent_crc, expected)
+
+    def test_tpatch_cmd_includes_crc(self):
+        """tpatch must send --crc covering comp + orig + target."""
+        import re
+        import struct
+        from utils.crc import crc16_update
+
+        self.protocol.send_cmd = MagicMock(return_value="[FLOK] Trampoline 0")
+
+        comp, orig, target = 1, 0x08002000, 0x20003000
+        self.protocol.tpatch(comp, orig, target)
+
+        cmd_str = self.protocol.send_cmd.call_args[0][0]
+        m = re.search(r"--crc 0x([0-9A-Fa-f]+)", cmd_str)
+        self.assertIsNotNone(m, "tpatch command must include --crc")
+        sent_crc = int(m.group(1), 16)
+
+        expected = crc16_update(0xFFFF, struct.pack("<III", comp, orig, target))
+        self.assertEqual(sent_crc, expected)
+
+    def test_dpatch_cmd_includes_crc(self):
+        """dpatch must send --crc covering comp + orig + target."""
+        import re
+        import struct
+        from utils.crc import crc16_update
+
+        self.protocol.send_cmd = MagicMock(return_value="[FLOK] DebugMon 0")
+
+        comp, orig, target = 2, 0x08003000, 0x20004000
+        self.protocol.dpatch(comp, orig, target)
+
+        cmd_str = self.protocol.send_cmd.call_args[0][0]
+        m = re.search(r"--crc 0x([0-9A-Fa-f]+)", cmd_str)
+        self.assertIsNotNone(m, "dpatch command must include --crc")
+        sent_crc = int(m.group(1), 16)
+
+        expected = crc16_update(0xFFFF, struct.pack("<III", comp, orig, target))
+        self.assertEqual(sent_crc, expected)
+
     def test_crc16_update_chaining(self):
         """crc16_update chaining must equal crc16 on concatenated data."""
         from utils.crc import crc16, crc16_update

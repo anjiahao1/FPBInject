@@ -362,13 +362,26 @@ static void cmd_upload(fl_context_t* ctx, uintptr_t offset, const char* data_str
     fl_response(true, "Uploaded %d bytes to 0x%lX", n, (unsigned long)dest);
 }
 
-static void cmd_read(fl_context_t* ctx, uintptr_t addr, int len, bool force) {
+static void cmd_read(fl_context_t* ctx, uintptr_t addr, int len, int crc, bool force) {
     uint8_t* buf = ctx->buf;
     char* b64_buf = ctx->b64_buf;
 
     if (len <= 0 || (size_t)len > FL_BUF_SIZE) {
         fl_response(false, "Invalid length %d (max %d)", len, (int)FL_BUF_SIZE);
         return;
+    }
+
+    /* Verify request CRC if provided: covers addr(4B) + len(4B) */
+    if (crc >= 0) {
+        uint32_t addr32 = (uint32_t)addr;
+        uint32_t len32 = (uint32_t)len;
+        uint16_t calc = 0xFFFF;
+        calc = calc_crc16_base(calc, &addr32, sizeof(addr32));
+        calc = calc_crc16_base(calc, &len32, sizeof(len32));
+        if (calc != (uint16_t)crc) {
+            fl_response(false, "Request CRC mismatch: 0x%04X != 0x%04X", (unsigned)crc, (unsigned)calc);
+            return;
+        }
     }
 
     if (!force && !fl_check_addr_range(addr, len)) {
@@ -438,7 +451,31 @@ static void cmd_write(fl_context_t* ctx, uintptr_t addr, const char* data_str, u
     fl_response(true, "WRITE %d bytes to 0x%lX", n, (unsigned long)addr);
 }
 
-static void cmd_patch(fl_context_t* ctx, uint32_t comp, uintptr_t orig, uintptr_t target) {
+/**
+ * @brief  Verify CRC for patch commands: covers comp(4B) + orig(4B) + target(4B)
+ * @return true if CRC matches or no CRC provided (crc < 0)
+ */
+static bool verify_patch_crc(int crc, uint32_t comp, uintptr_t orig, uintptr_t target) {
+    if (crc < 0)
+        return true;
+    uint32_t comp32 = comp;
+    uint32_t orig32 = (uint32_t)orig;
+    uint32_t target32 = (uint32_t)target;
+    uint16_t calc = 0xFFFF;
+    calc = calc_crc16_base(calc, &comp32, sizeof(comp32));
+    calc = calc_crc16_base(calc, &orig32, sizeof(orig32));
+    calc = calc_crc16_base(calc, &target32, sizeof(target32));
+    if (calc != (uint16_t)crc) {
+        fl_response(false, "CRC mismatch: 0x%04X != 0x%04X", (unsigned)crc, (unsigned)calc);
+        return false;
+    }
+    return true;
+}
+
+static void cmd_patch(fl_context_t* ctx, uint32_t comp, uintptr_t orig, uintptr_t target, int crc) {
+    if (!verify_patch_crc(crc, comp, orig, target))
+        return;
+
     if (comp >= fpb_get_state()->num_code_comp || comp >= FL_MAX_SLOTS) {
         fl_response(false, "Invalid comp %lu", (unsigned long)comp);
         return;
@@ -462,8 +499,11 @@ static void cmd_patch(fl_context_t* ctx, uint32_t comp, uintptr_t orig, uintptr_
     fl_response(true, "Patch %lu: 0x%08lX -> 0x%08lX", (unsigned long)comp, (unsigned long)orig, (unsigned long)target);
 }
 
-static void cmd_tpatch(fl_context_t* ctx, uint32_t comp, uintptr_t orig, uintptr_t target) {
+static void cmd_tpatch(fl_context_t* ctx, uint32_t comp, uintptr_t orig, uintptr_t target, int crc) {
 #ifndef FPB_NO_TRAMPOLINE
+    if (!verify_patch_crc(crc, comp, orig, target))
+        return;
+
     if (comp >= FPB_TRAMPOLINE_COUNT || comp >= FL_MAX_SLOTS) {
         fl_response(false, "Invalid comp %lu (max %d)", (unsigned long)comp, FPB_TRAMPOLINE_COUNT - 1);
         return;
@@ -503,8 +543,11 @@ static void cmd_tpatch(fl_context_t* ctx, uint32_t comp, uintptr_t orig, uintptr
 #endif
 }
 
-static void cmd_dpatch(fl_context_t* ctx, uint32_t comp, uintptr_t orig, uintptr_t target) {
+static void cmd_dpatch(fl_context_t* ctx, uint32_t comp, uintptr_t orig, uintptr_t target, int crc) {
 #ifndef FPB_NO_DEBUGMON
+    if (!verify_patch_crc(crc, comp, orig, target))
+        return;
+
     if (comp >= FPB_DEBUGMON_MAX_REDIRECTS || comp >= FL_MAX_SLOTS) {
         fl_response(false, "Invalid comp %lu (max %d)", (unsigned long)comp, FPB_DEBUGMON_MAX_REDIRECTS - 1);
         return;
@@ -971,7 +1014,7 @@ int fl_exec_cmd(fl_context_t* ctx, int argc, const char** argv) {
         }
         cmd_upload(ctx, addr, data, crc, crc >= 0);
     } else if (strcmp(cmd, "read") == 0) {
-        cmd_read(ctx, addr, len, force);
+        cmd_read(ctx, addr, len, crc, force);
     } else if (strcmp(cmd, "write") == 0) {
         if (!data) {
             fl_response(false, "Missing --data");
@@ -983,19 +1026,19 @@ int fl_exec_cmd(fl_context_t* ctx, int argc, const char** argv) {
             fl_response(false, "Missing --orig/--target");
             return -1;
         }
-        cmd_patch(ctx, comp, orig, target);
+        cmd_patch(ctx, comp, orig, target, crc);
     } else if (strcmp(cmd, "tpatch") == 0) {
         if (orig == 0 || target == 0) {
             fl_response(false, "Missing --orig/--target");
             return -1;
         }
-        cmd_tpatch(ctx, comp, orig, target);
+        cmd_tpatch(ctx, comp, orig, target, crc);
     } else if (strcmp(cmd, "dpatch") == 0) {
         if (orig == 0 || target == 0) {
             fl_response(false, "Missing --orig/--target");
             return -1;
         }
-        cmd_dpatch(ctx, comp, orig, target);
+        cmd_dpatch(ctx, comp, orig, target, crc);
     } else if (strcmp(cmd, "unpatch") == 0) {
         cmd_unpatch(ctx, comp, all);
 #if FL_USE_FILE
