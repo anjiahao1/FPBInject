@@ -2130,6 +2130,34 @@ module.exports = function (w) {
       w.updateAutoInjectProgress(100, 'failed', true);
       assertTrue(true);
     });
+
+    it('skips update when success/failed status is not a new change', () => {
+      // Create a progress element to verify it is NOT touched
+      const progressEl = browserGlobals.document.createElement('div');
+      progressEl.classList.add('inject-progress');
+      progressEl.style.display = 'none';
+      const fill = browserGlobals.document.createElement('div');
+      fill.id = 'injectProgressFill';
+      const text = browserGlobals.document.createElement('span');
+      text.id = 'injectProgressText';
+      progressEl.appendChild(fill);
+      progressEl.appendChild(text);
+      document.body.appendChild(progressEl);
+
+      // Repeated poll with success but statusChanged=false
+      w.FPBState.autoInjectProgressHideTimer = null;
+      w.updateAutoInjectProgress(100, 'success', false);
+
+      // Progress bar should remain hidden — not a new status change
+      assertEqual(progressEl.style.display, 'none');
+
+      // Same for failed
+      w.updateAutoInjectProgress(100, 'failed', false);
+      assertEqual(progressEl.style.display, 'none');
+
+      // Cleanup
+      document.body.removeChild(progressEl);
+    });
   });
 
   describe('File Browser Functions (features/filebrowser.js)', () => {

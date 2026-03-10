@@ -394,6 +394,12 @@ function updateAutoInjectProgress(progress, status, statusChanged = false) {
 
   if (status === 'idle') return;
 
+  // For terminal states (success/failed), only update UI on the initial
+  // status change. Subsequent polls with the same status must not re-show
+  // the progress bar — neither while the hide timer is running, nor after
+  // it has already fired and hidden the bar.
+  if ((status === 'success' || status === 'failed') && !statusChanged) return;
+
   allProgressEls.forEach((progressEl) => {
     const progressText = progressEl.querySelector(
       '#injectProgressText, .progress-text',
