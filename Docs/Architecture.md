@@ -6,28 +6,282 @@ Technical documentation for the FPB-based code injection system.
 
 FPBInject enables runtime function hooking on ARM Cortex-M microcontrollers using the Flash Patch and Breakpoint (FPB) hardware unit. It redirects function calls to custom code in RAM without modifying Flash memory.
 
-## Injection Flow
+The system consists of four major components: **Lower Machine** (embedded firmware), **Upper Machine** (WebServer), **Compiler** (cross-compilation toolchain), and **GDB** (symbol resolution engine). They work together to achieve a complete injection workflow.
+
+## System Architecture
+
+### High-Level Overview
 
 ```mermaid
-flowchart LR
-    subgraph step1["1. Original Call"]
-        A["caller()<br/>calls target_func"]
+graph LR
+    Browser["🌐 Browser<br/>Web UI / Terminal / Editor"]
+
+    subgraph Upper["Upper Machine (Python · Flask)"]
+        FPI["FPBInject<br/>Orchestrator"]
     end
-    
-    subgraph step2["2. FPB Intercept"]
-        B["FPB Unit<br/>addr match<br/>0x08xxxxxx"]
+
+    subgraph Tools["Host Tools"]
+        CC["Compiler<br/>arm-none-eabi-gcc"]
+        GDB["GDB<br/>DWARF Engine"]
     end
-    
-    subgraph step3["3. Trampoline"]
-        C["trampoline_0<br/>in Flash<br/>loads target"]
+
+    subgraph Lower["Lower Machine (ARM Cortex-M)"]
+        FW_CORE["Firmware<br/>fl_exec_cmd"]
+        FPB_HW["FPB Hardware"]
     end
-    
-    subgraph step4["4. RAM Code"]
-        D["patched_func()<br/>@ RAM<br/>executes"]
-    end
-    
-    A --> B --> C --> D
+
+    Browser -->|"HTTP REST + SSE"| FPI
+    FPI -->|"Invoke"| CC
+    FPI -->|"GDB/MI"| GDB
+    FPI ==>|"UART · Text Protocol<br/>Base64 + CRC-16"| FW_CORE
+    GDB -.->|"RSP m/M → Serial"| FW_CORE
+    FW_CORE --> FPB_HW
 ```
+
+### Upper Machine (WebServer)
+
+```mermaid
+graph TB
+    subgraph Routes["Flask Blueprints (REST API)"]
+        R_CONN["connection.py<br/>/connect /status"]
+        R_FPB["fpb.py<br/>/fpb/inject /unpatch"]
+        R_PATCH["patch.py<br/>/patch/source"]
+        R_SYM["symbols.py"]
+        R_TRANS["transfer.py"]
+        R_GDB["gdb.py"]
+        R_WATCH["watch.py"]
+    end
+
+    subgraph Core["Core Modules"]
+        FPI["FPBInject<br/>fpb_inject.py"]
+        PROTO["FPBProtocol<br/>serial_protocol.py"]
+        COMP["compile_inject<br/>compiler.py"]
+        PGEN["PatchGenerator<br/>patch_generator.py"]
+        ELF["elf_utils.py"]
+        FT["FileTransfer<br/>file_transfer.py"]
+    end
+
+    subgraph GDBStack["GDB Stack"]
+        GM["GDBManager"]
+        GS["GDBSession"]
+        GB["GDBRSPBridge"]
+    end
+
+    subgraph Services["Services"]
+        DW["DeviceWorker<br/>Serial I/O Thread"]
+        FW["FileWatcher<br/>Auto Inject"]
+        STATE["AppState<br/>DeviceState"]
+    end
+
+    MCP["MCP Server<br/>AI Agent Interface"]
+
+    R_FPB --> FPI
+    R_PATCH --> PGEN
+    R_SYM --> GS
+    R_TRANS --> FT
+    R_GDB --> GM
+
+    FPI --> PROTO
+    FPI --> COMP
+    FPI --> GS
+    FPI --> PGEN
+    GM --> GS
+    GM --> GB
+    GB -->|"RSP m/M"| PROTO
+
+    FPI --> DW
+    PROTO --> DW
+    FW -->|"File Change"| FPI
+    MCP --> FPI
+    DW --> STATE
+```
+
+### Compiler Pipeline
+
+```mermaid
+graph LR
+    CCJSON["compile_commands.json"] --> FLAGS["Extract Flags<br/>-I -D -mcpu ..."]
+    FLAGS --> GCC["gcc -c<br/>→ patch.o"]
+    GCC --> LD["ld -Tscript.ld<br/>--just-symbols=firmware.elf<br/>→ patch.elf"]
+    LD --> OBJCOPY["objcopy -O binary<br/>→ patch.bin"]
+    LD --> NM["nm<br/>→ symbols"]
+    OBJCOPY --> BIN["Binary + Symbols"]
+    NM --> BIN
+
+    style BIN fill:#dfd,stroke:#0a0
+```
+
+> **Two-pass compilation**: First compile at placeholder address `0x20000000` to determine code size, then `alloc` on device, then recompile at the actual RAM address.
+
+### Lower Machine (Firmware)
+
+```mermaid
+graph TB
+    UART["UART RX"] --> STREAM["fl_stream<br/>Line Buffer + Parse"]
+    STREAM --> EXEC["fl_exec_cmd<br/>argparse → Command Dispatch"]
+
+    EXEC --> ALLOC["fl_allocator<br/>Block Allocator"]
+    EXEC --> FILE["fl_file<br/>POSIX / LIBC / FATFS"]
+    EXEC --> FPB_DRV["fpb_inject<br/>FPB Register Ops"]
+    EXEC --> TRAMP["fpb_trampoline<br/>Flash Trampoline"]
+    EXEC --> DBGMON["fpb_debugmon<br/>DebugMonitor Exception"]
+
+    FPB_DRV --> FPB_HW["FPB Unit · 0xE0002000"]
+    TRAMP --> FLASH["Flash · Trampoline Code"]
+    TRAMP --> SRAM["SRAM · Target Addr Table"]
+    DBGMON --> DEMCR["DEMCR · DebugMonitor Control"]
+    DBGMON --> FPB_HW
+```
+
+## Injection Workflow (End-to-End)
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant FW as FileWatcher
+    participant FPI as FPBInject
+    participant PG as PatchGenerator
+    participant GDB as GDBSession
+    participant CC as Compiler
+    participant Proto as FPBProtocol
+    participant DW as DeviceWorker
+    participant Dev as Device (Firmware)
+
+    User->>FW: Save source file (with FPB_INJECT marker)
+    FW->>PG: Detect marked functions
+    PG-->>FW: target_func_name
+    FW->>FPI: inject(target_func, source)
+
+    Note over FPI: 1. Symbol Resolution
+    FPI->>GDB: lookup_symbol(target_func)
+    GDB-->>FPI: orig_addr = 0x08001234
+
+    Note over FPI: 2. First Compile (placeholder addr)
+    FPI->>CC: compile(base_addr=0x20000000)
+    CC-->>FPI: code_size = 256 bytes
+
+    Note over FPI: 3. Device Memory Allocation
+    FPI->>Proto: send_cmd("alloc --size 264")
+    Proto->>DW: Submit to worker thread
+    DW->>Dev: fl --cmd alloc --size 264
+    Dev-->>DW: [FLOK] Allocated 264 at 0x20001000
+    DW-->>Proto: Parse response
+    Proto-->>FPI: alloc_addr = 0x20001000
+
+    Note over FPI: 4. Second Compile (actual addr)
+    FPI->>CC: compile(base_addr=0x20001000)
+    CC-->>FPI: binary + symbols
+
+    Note over FPI: 5. Chunked Upload
+    loop Every 512 bytes
+        FPI->>Proto: upload(offset, chunk, crc)
+        Proto->>DW: Submit to worker thread
+        DW->>Dev: fl --cmd upload --addr OFFSET --data BASE64 --crc CRC
+        Dev-->>DW: [FLOK] Uploaded N bytes
+    end
+
+    Note over FPI: 6. Activate Patch
+    FPI->>Proto: send_cmd("tpatch --comp 0 --orig 0x08001234 --target 0x20001000")
+    Proto->>DW: Submit to worker thread
+    DW->>Dev: fl --cmd tpatch ...
+    Dev->>Dev: FPB REMAP → Trampoline → RAM
+    Dev-->>DW: [FLOK] Trampoline 0: 0x08001234 → 0x20001000
+
+    FPI-->>User: ✅ Injection Successful
+```
+
+## Communication Protocol Stack
+
+```mermaid
+graph LR
+    subgraph L5["Application Layer"]
+        CMD["fl --cmd ping/info/alloc/upload/patch/..."]
+    end
+
+    subgraph L4["Encoding Layer"]
+        B64["Base64 Encoding (binary data)"]
+        CRC["CRC-16 Checksum"]
+    end
+
+    subgraph L3["Framing Layer"]
+        REQ["Request: fl --cmd CMD --arg VAL\\n"]
+        RSP_OK["Success: [FLOK] message"]
+        RSP_ERR["Failure: [FLERR] message"]
+        RSP_DATA["Data: [FLOK] ... data=BASE64\\n[FLEND]"]
+    end
+
+    subgraph L2["Transport Layer"]
+        UART["UART (pyserial ↔ fl_stream)"]
+        CHUNK["Chunked TX (tx_chunk_size)"]
+        RETRY["Auto Retry (max_retries)"]
+    end
+
+    subgraph L1["Physical Layer"]
+        USB["USB-Serial / JTAG-UART"]
+    end
+
+    CMD --> B64 --> REQ --> CHUNK --> USB
+    USB --> RSP_OK
+    USB --> RSP_ERR
+    USB --> RSP_DATA
+    CRC -.->|"Verify"| B64
+    RETRY -.->|"Retry on Failure"| CHUNK
+```
+
+## GDB Integration Architecture
+
+```mermaid
+graph TB
+    subgraph IDE["External IDE (VS Code / CLion)"]
+        CORTEX["Cortex-Debug<br/>target remote :3333"]
+    end
+
+    subgraph Upper["WebServer"]
+        GM["GDBManager"]
+        GS["GDBSession<br/>(pygdbmi)"]
+        GB_INT["Internal RSP Bridge<br/>(Auto-assigned Port)"]
+        GB_EXT["External RSP Bridge<br/>(Fixed Port 3333)"]
+        PROTO2["FPBProtocol"]
+        DW2["DeviceWorker"]
+    end
+
+    subgraph GDB_Proc2["GDB Process"]
+        GDB2["arm-none-eabi-gdb<br/>Load firmware.elf"]
+        DWARF2["DWARF Parser<br/>Symbol/Type/Addr"]
+    end
+
+    subgraph Device2["Device"]
+        MEM["Device Memory"]
+    end
+
+    %% GDB as DWARF engine
+    GM -->|"Start/Stop"| GS
+    GM -->|"Start/Stop"| GB_INT
+    GM -->|"Start/Stop"| GB_EXT
+    GS -->|"GDB/MI<br/>file firmware.elf<br/>target remote :PORT"| GDB2
+    GDB2 --> DWARF2
+    GDB2 -->|"RSP m/M packets"| GB_INT
+    GB_INT -->|"read_memory_fn<br/>write_memory_fn"| PROTO2
+    PROTO2 --> DW2
+    DW2 -->|"fl --cmd read/write"| MEM
+
+    %% External IDE
+    CORTEX -->|"RSP over TCP"| GB_EXT
+    GB_EXT -->|"read_memory_fn<br/>write_memory_fn"| DW2
+
+    style DWARF2 fill:#ffd,stroke:#aa0
+```
+
+The core value of GDB in FPBInject is not debugging, but serving as a **DWARF parsing engine**:
+
+| Purpose | GDB Command | Caller |
+|---------|-------------|--------|
+| Symbol address resolution | `info address func_name` | `FPBInject._resolve_symbol_addr()` |
+| Type information query | `ptype struct_name` | Frontend Watch expressions |
+| Struct layout | `print sizeof(struct)` | Frontend symbol search |
+| Function signature extraction | `whatis func_name` | MCP Server `signature()` |
+
+The internal RSP Bridge forwards GDB memory read/write requests (`m`/`M` packets) to device serial commands (`fl --cmd read/write`), enabling GDB to transparently access device memory. The external RSP Bridge (port 3333) allows IDEs to connect directly.
 
 ## FPB Unit
 
@@ -48,13 +302,15 @@ FPBInject repurposes FPB's REMAP feature for code injection.
 
 > **Note**: ARMv8-M removed REMAP, requiring DebugMonitor mode.
 
-### STM32F103 FPB Resources
+### FPB Resources (FPBv1, e.g. STM32F103)
 
 | Resource | Count | Range |
-|----------|-------|----- -|
-| Code Comparators | 6-8 (FPB v1: 6, v2: 8) | 0x00000000 - 0x1FFFFFFF |
+|----------|-------|-------|
+| Code Comparators | 6 | 0x00000000 - 0x1FFFFFFF |
 | Literal Comparators | 2 | 0x00000000 - 0x1FFFFFFF |
-| REMAP Table | 8 entries | SRAM |
+| REMAP Table | 6 entries | SRAM (32-byte aligned) |
+
+> FPBv2 (ARMv8-M) increases code comparators to 8 but removes REMAP support.
 
 ### FPB Registers
 
