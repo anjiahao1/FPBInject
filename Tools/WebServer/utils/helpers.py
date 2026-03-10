@@ -42,6 +42,20 @@ def build_slot_response(device, app_state, get_fpb_inject):
                 addr = sym_info
             symbols_reverse[addr] = sym_name
 
+    # Also include symbols from FPBInject nm cache (fast offline lookup)
+    try:
+        fpb = get_fpb_inject()
+        if hasattr(fpb, "_get_elf_symbols"):
+            nm_symbols = fpb._get_elf_symbols()
+            for sym_name, sym_info in nm_symbols.items():
+                addr = (
+                    sym_info.get("addr", 0) if isinstance(sym_info, dict) else sym_info
+                )
+                if addr not in symbols_reverse:
+                    symbols_reverse[addr] = sym_name
+    except Exception:
+        pass
+
     # Build slot states from device info
     slots = []
     device_slots = info.get("slots", [])
