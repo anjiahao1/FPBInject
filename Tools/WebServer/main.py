@@ -21,6 +21,7 @@ import importlib
 import importlib.metadata
 import logging
 import os
+import shutil
 import socket
 import subprocess
 import sys
@@ -101,6 +102,43 @@ def check_requirements():
             print("✅ All packages installed successfully.")
     else:
         print("Skipping install, continuing...")
+
+    return True
+
+
+def check_toolchain():
+    """Check if gdb-multiarch is installed.
+
+    Returns True if available or user chose to continue.
+    """
+    if shutil.which("gdb-multiarch"):
+        return True
+
+    print("\n⚠️  'gdb-multiarch' not found in PATH.")
+    print("   GDB features (symbol lookup, struct layout, watch expressions)")
+    print("   will not be available without it.")
+    print()
+    print("   Install on Debian/Ubuntu:")
+    print("     sudo apt-get install gdb-multiarch")
+    print()
+
+    # Non-interactive mode: skip
+    if not sys.stdin.isatty():
+        print("Non-interactive mode, continuing without gdb-multiarch.")
+        return True
+
+    try:
+        answer = (
+            input("Continue without GDB? [Y/n/q] (Y=continue, q=quit): ")
+            .strip()
+            .lower()
+        )
+    except (EOFError, KeyboardInterrupt):
+        return True
+
+    if answer == "q":
+        print("Aborted.")
+        sys.exit(0)
 
     return True
 
@@ -239,6 +277,9 @@ def main():
 
     # Check dependencies
     check_requirements()
+
+    # Check toolchain (gdb-multiarch)
+    check_toolchain()
 
     # Check if port is already in use, unless skipped
     if not args.skip_port_check:
