@@ -265,6 +265,109 @@ class TestFPBUnpatchRoute(TestFPBRoutesBase):
         self.assertIn("Unexpected error", data["message"])
 
 
+class TestFPBEnableRoute(TestFPBRoutesBase):
+    """FPB enable route tests"""
+
+    @patch("app.routes.fpb._get_helpers")
+    def test_enable_single_slot(self, mock_helpers):
+        """Test enable single slot"""
+        mock_fpb = Mock()
+        mock_fpb.enable_patch.return_value = (True, "Enabled patch 0")
+        mock_helpers.return_value = make_mock_helpers(mock_fpb)
+
+        response = self.client.post("/api/fpb/enable", json={"comp": 0, "enable": True})
+        data = json.loads(response.data)
+
+        self.assertTrue(data["success"])
+        mock_fpb.enable_patch.assert_called_once_with(comp=0, enable=True, all=False)
+
+    @patch("app.routes.fpb._get_helpers")
+    def test_disable_single_slot(self, mock_helpers):
+        """Test disable single slot"""
+        mock_fpb = Mock()
+        mock_fpb.enable_patch.return_value = (True, "Disabled patch 0")
+        mock_helpers.return_value = make_mock_helpers(mock_fpb)
+
+        response = self.client.post(
+            "/api/fpb/enable", json={"comp": 0, "enable": False}
+        )
+        data = json.loads(response.data)
+
+        self.assertTrue(data["success"])
+        mock_fpb.enable_patch.assert_called_once_with(comp=0, enable=False, all=False)
+
+    @patch("app.routes.fpb._get_helpers")
+    def test_enable_all_slots(self, mock_helpers):
+        """Test enable all slots"""
+        mock_fpb = Mock()
+        mock_fpb.enable_patch.return_value = (True, "Enabled 6 patches")
+        mock_helpers.return_value = make_mock_helpers(mock_fpb)
+
+        response = self.client.post(
+            "/api/fpb/enable", json={"enable": True, "all": True}
+        )
+        data = json.loads(response.data)
+
+        self.assertTrue(data["success"])
+        mock_fpb.enable_patch.assert_called_once_with(comp=0, enable=True, all=True)
+
+    @patch("app.routes.fpb._get_helpers")
+    def test_disable_all_slots(self, mock_helpers):
+        """Test disable all slots"""
+        mock_fpb = Mock()
+        mock_fpb.enable_patch.return_value = (True, "Disabled 6 patches")
+        mock_helpers.return_value = make_mock_helpers(mock_fpb)
+
+        response = self.client.post(
+            "/api/fpb/enable", json={"enable": False, "all": True}
+        )
+        data = json.loads(response.data)
+
+        self.assertTrue(data["success"])
+        mock_fpb.enable_patch.assert_called_once_with(comp=0, enable=False, all=True)
+
+    @patch("app.routes.fpb._get_helpers")
+    def test_enable_failure(self, mock_helpers):
+        """Test enable failure"""
+        mock_fpb = Mock()
+        mock_fpb.enable_patch.return_value = (False, "Invalid comp")
+        mock_helpers.return_value = make_mock_helpers(mock_fpb)
+
+        response = self.client.post(
+            "/api/fpb/enable", json={"comp": 99, "enable": True}
+        )
+        data = json.loads(response.data)
+
+        self.assertFalse(data["success"])
+
+    @patch("app.routes.fpb._get_helpers")
+    def test_enable_exception(self, mock_helpers):
+        """Test enable with exception"""
+        mock_fpb = Mock()
+        mock_fpb.enable_patch.side_effect = Exception("Unexpected error")
+        mock_helpers.return_value = make_mock_helpers(mock_fpb)
+
+        response = self.client.post("/api/fpb/enable", json={"comp": 0, "enable": True})
+        data = json.loads(response.data)
+
+        self.assertFalse(data["success"])
+        self.assertIn("Unexpected error", data["message"])
+
+    @patch("app.routes.fpb._get_helpers")
+    def test_enable_default_values(self, mock_helpers):
+        """Test enable with default values"""
+        mock_fpb = Mock()
+        mock_fpb.enable_patch.return_value = (True, "OK")
+        mock_helpers.return_value = make_mock_helpers(mock_fpb)
+
+        response = self.client.post("/api/fpb/enable", json={})
+        data = json.loads(response.data)
+
+        self.assertTrue(data["success"])
+        # Default: comp=0, enable=True, all=False
+        mock_fpb.enable_patch.assert_called_once_with(comp=0, enable=True, all=False)
+
+
 class TestFPBInjectRoute(TestFPBRoutesBase):
     """FPB inject route tests"""
 

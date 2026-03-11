@@ -68,6 +68,7 @@ def build_slot_response(device, app_state, get_fpb_inject):
             orig_addr = slot_data.get("orig_addr", 0)
             target_addr = slot_data.get("target_addr", 0)
             code_size = slot_data.get("code_size", 0)
+            enabled = slot_data.get("enabled", True)
             # Lookup function name from symbols
             func_name = symbols_reverse.get(orig_addr, "")
             if not func_name:
@@ -76,6 +77,7 @@ def build_slot_response(device, app_state, get_fpb_inject):
                 {
                     "id": i,
                     "occupied": True,
+                    "enabled": enabled,
                     "orig_addr": f"0x{orig_addr:08X}",
                     "target_addr": f"0x{target_addr:08X}",
                     "func": func_name,
@@ -87,6 +89,7 @@ def build_slot_response(device, app_state, get_fpb_inject):
                 {
                     "id": i,
                     "occupied": False,
+                    "enabled": True,
                     "orig_addr": "",
                     "target_addr": "",
                     "func": "",

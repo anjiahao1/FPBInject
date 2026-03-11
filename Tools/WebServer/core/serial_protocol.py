@@ -400,7 +400,7 @@ class FPBProtocol:
                     elif line.startswith("Slot["):
                         try:
                             match = re.match(
-                                r"Slot\[(\d+)\]:\s*(0x[0-9A-Fa-f]+)\s*->\s*(0x[0-9A-Fa-f]+),\s*(\d+)\s*bytes",
+                                r"Slot\[(\d+)\]:\s*(0x[0-9A-Fa-f]+)\s*->\s*(0x[0-9A-Fa-f]+),\s*(\d+)\s*bytes.*\(.*,\s*(on|off)\)",
                                 line,
                             )
                             if match:
@@ -408,10 +408,12 @@ class FPBProtocol:
                                 orig_addr = int(match.group(2), 16)
                                 target_addr = int(match.group(3), 16)
                                 code_size = int(match.group(4))
+                                enabled = match.group(5) == "on"
                                 info["slots"].append(
                                     {
                                         "id": slot_id,
                                         "occupied": True,
+                                        "enabled": enabled,
                                         "orig_addr": orig_addr,
                                         "target_addr": target_addr,
                                         "code_size": code_size,
@@ -425,6 +427,7 @@ class FPBProtocol:
                                         {
                                             "id": slot_id,
                                             "occupied": False,
+                                            "enabled": True,
                                             "orig_addr": 0,
                                             "target_addr": 0,
                                             "code_size": 0,
@@ -680,6 +683,22 @@ class FPBProtocol:
                 cmd = "-c unpatch --all"
             else:
                 cmd = f"-c unpatch --comp {comp}"
+            resp = self.send_cmd(cmd)
+            result = self.parse_response(resp)
+            return result.get("ok", False), result.get("msg", "")
+        except Exception as e:
+            return False, str(e)
+
+    def enable_patch(
+        self, comp: int = 0, enable: bool = True, all: bool = False
+    ) -> Tuple[bool, str]:
+        """Enable or disable FPB patch without clearing it."""
+        try:
+            enable_val = 1 if enable else 0
+            if all:
+                cmd = f"-c enable --enable {enable_val} --all"
+            else:
+                cmd = f"-c enable --comp {comp} --enable {enable_val}"
             resp = self.send_cmd(cmd)
             result = self.parse_response(resp)
             return result.get("ok", False), result.get("msg", "")

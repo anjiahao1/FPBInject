@@ -23,11 +23,25 @@ function updateSlotUI() {
         i === state.selectedSlot && !isDisabled,
       );
       slotItem.classList.toggle('slot-disabled', isDisabled);
+      slotItem.classList.toggle(
+        'slot-disabled-patch',
+        slotState.occupied && !slotState.enabled && !isDisabled,
+      );
 
       const actionsDiv = slotItem.querySelector('.slot-actions');
       if (actionsDiv) {
         actionsDiv.style.display =
           slotState.occupied && !isDisabled ? 'flex' : 'none';
+      }
+
+      // Update indicator title
+      const indicator = slotItem.querySelector('.slot-indicator');
+      if (indicator && slotState.occupied && !isDisabled) {
+        indicator.title = slotState.enabled
+          ? t('tooltips.click_to_disable', 'Click to disable patch')
+          : t('tooltips.click_to_enable', 'Click to enable patch');
+      } else if (indicator) {
+        indicator.title = '';
       }
     }
 
@@ -43,8 +57,9 @@ function updateSlotUI() {
         const sizeInfo = slotState.code_size
           ? `, ${slotState.code_size} ${t('device.bytes', 'Bytes')}`
           : '';
-        funcSpan.textContent = `${slotState.orig_addr}${funcName} → ${slotState.target_addr}${sizeInfo}`;
-        funcSpan.title = `${t('tooltips.slot_original', 'Original')}: ${slotState.orig_addr}${funcName}\n${t('tooltips.slot_target', 'Target')}: ${slotState.target_addr}\n${t('tooltips.slot_code_size', 'Code size')}: ${slotState.code_size || 0} ${t('device.bytes', 'Bytes')}`;
+        const enabledInfo = slotState.enabled ? '' : ' [OFF]';
+        funcSpan.textContent = `${slotState.orig_addr}${funcName} → ${slotState.target_addr}${sizeInfo}${enabledInfo}`;
+        funcSpan.title = `${t('tooltips.slot_original', 'Original')}: ${slotState.orig_addr}${funcName}\n${t('tooltips.slot_target', 'Target')}: ${slotState.target_addr}\n${t('tooltips.slot_code_size', 'Code size')}: ${slotState.code_size || 0} ${t('device.bytes', 'Bytes')}\n${t('tooltips.slot_status', 'Status')}: ${slotState.enabled ? 'ON' : 'OFF'}`;
       } else {
         funcSpan.textContent = state.isConnected
           ? t('panels.slot_empty', 'Empty')
@@ -131,6 +146,7 @@ async function fpbUnpatch(slotId) {
     if (data.success) {
       state.slotStates[slotId] = {
         occupied: false,
+        enabled: true,
         func: '',
         orig_addr: '',
         target_addr: '',
@@ -179,6 +195,7 @@ async function fpbUnpatchAll() {
         .fill()
         .map(() => ({
           occupied: false,
+          enabled: true,
           func: '',
           orig_addr: '',
           target_addr: '',
@@ -192,6 +209,42 @@ async function fpbUnpatchAll() {
     }
   } catch (e) {
     log.error(`Unpatch all error: ${e}`);
+  }
+}
+
+async function toggleSlotEnable(slotId) {
+  const state = window.FPBState;
+  if (!state.isConnected) {
+    log.error('Not connected');
+    return;
+  }
+
+  const slotState = state.slotStates[slotId];
+  if (!slotState || !slotState.occupied) {
+    return; // Only toggle occupied slots
+  }
+
+  const newEnabled = !slotState.enabled;
+
+  try {
+    const res = await fetch('/api/fpb/enable', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ comp: slotId, enable: newEnabled }),
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      slotState.enabled = newEnabled;
+      updateSlotUI();
+      log.success(`Slot ${slotId} ${newEnabled ? 'enabled' : 'disabled'}`);
+    } else {
+      log.error(
+        `Failed to ${newEnabled ? 'enable' : 'disable'} slot ${slotId}: ${data.message}`,
+      );
+    }
+  } catch (e) {
+    log.error(`Toggle enable error: ${e}`);
   }
 }
 
@@ -215,4 +268,5 @@ window.onSlotSelectChange = onSlotSelectChange;
 window.initSlotSelectListener = initSlotSelectListener;
 window.fpbUnpatch = fpbUnpatch;
 window.fpbUnpatchAll = fpbUnpatchAll;
+window.toggleSlotEnable = toggleSlotEnable;
 window.updateMemoryInfo = updateMemoryInfo;

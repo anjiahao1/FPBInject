@@ -21,6 +21,7 @@ let slotStates = Array(8)
   .fill()
   .map(() => ({
     occupied: false,
+    enabled: true,
     func: '',
     orig_addr: '',
     target_addr: '',

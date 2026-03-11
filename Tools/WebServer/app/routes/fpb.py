@@ -247,6 +247,41 @@ def api_fpb_unpatch():
         return jsonify({"success": False, "message": str(e)})
 
 
+@bp.route("/fpb/enable", methods=["POST"])
+def api_fpb_enable():
+    """Enable or disable FPB patch without clearing it."""
+    log_info, _, _, _, get_fpb_inject, _ = _get_helpers()
+
+    try:
+        data = request.json or {}
+        comp = data.get("comp", 0)
+        enable = data.get("enable", True)
+        enable_all = data.get("all", False)
+
+        fpb = get_fpb_inject()
+
+        def do_enable():
+            return fpb.enable_patch(comp=comp, enable=enable, all=enable_all)
+
+        result = _run_serial_op(do_enable, timeout=5.0)
+
+        if "error" in result and result.get("error"):
+            return jsonify({"success": False, "message": result["error"]})
+
+        success, msg = result
+
+        if success:
+            action = "enabled" if enable else "disabled"
+            if enable_all:
+                log_info(f"All patches {action}")
+            else:
+                log_info(f"Slot {comp} {action}")
+
+        return jsonify({"success": success, "message": msg})
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)})
+
+
 @bp.route("/fpb/inject", methods=["POST"])
 def api_fpb_inject():
     """Perform code injection."""

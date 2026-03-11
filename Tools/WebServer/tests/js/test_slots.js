@@ -675,6 +675,7 @@ module.exports = function (w) {
         .fill()
         .map((_, i) => ({
           occupied: true,
+          enabled: true,
           func: `test${i}`,
           orig_addr: `0x${i}000`,
           target_addr: `0x${i}100`,
@@ -687,6 +688,407 @@ module.exports = function (w) {
       assertTrue(w.FPBState.slotStates.every((s) => !s.occupied));
       w.FPBState.toolTerminal = null;
       w.FPBState.isConnected = false;
+    });
+  });
+
+  describe('toggleSlotEnable Function', () => {
+    it('toggleSlotEnable is a function', () =>
+      assertTrue(typeof w.toggleSlotEnable === 'function'));
+
+    it('is async function', () => {
+      assertTrue(w.toggleSlotEnable.constructor.name === 'AsyncFunction');
+    });
+
+    it('returns early if not connected', async () => {
+      w.FPBState.isConnected = false;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      await w.toggleSlotEnable(0);
+      assertTrue(
+        mockTerm._writes.some(
+          (wr) => wr.msg && wr.msg.includes('Not connected'),
+        ),
+      );
+      w.FPBState.toolTerminal = null;
+    });
+
+    it('returns early if slot not occupied', async () => {
+      w.FPBState.isConnected = true;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      w.FPBState.slotStates = Array(8)
+        .fill()
+        .map(() => ({ occupied: false, enabled: true }));
+      await w.toggleSlotEnable(0);
+      // Should not make any fetch calls
+      const calls = getFetchCalls();
+      assertTrue(!calls.some((c) => c.url.includes('/api/fpb/enable')));
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+
+    it('sends POST to /api/fpb/enable with enable=false when currently enabled', async () => {
+      w.FPBState.isConnected = true;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: true,
+          func: 'test',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      setFetchResponse('/api/fpb/enable', { success: true });
+      await w.toggleSlotEnable(0);
+      const calls = getFetchCalls();
+      const enableCall = calls.find((c) => c.url.includes('/api/fpb/enable'));
+      assertTrue(enableCall !== undefined);
+      const body = JSON.parse(enableCall.options.body);
+      assertEqual(body.comp, 0);
+      assertEqual(body.enable, false);
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+
+    it('sends POST to /api/fpb/enable with enable=true when currently disabled', async () => {
+      w.FPBState.isConnected = true;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: false,
+          func: 'test',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      setFetchResponse('/api/fpb/enable', { success: true });
+      await w.toggleSlotEnable(0);
+      const calls = getFetchCalls();
+      const enableCall = calls.find((c) => c.url.includes('/api/fpb/enable'));
+      assertTrue(enableCall !== undefined);
+      const body = JSON.parse(enableCall.options.body);
+      assertEqual(body.comp, 0);
+      assertEqual(body.enable, true);
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+
+    it('updates slot state on success', async () => {
+      w.FPBState.isConnected = true;
+      w.FPBState.toolTerminal = new MockTerminal();
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: true,
+          func: 'test',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      setFetchResponse('/api/fpb/enable', { success: true });
+      await w.toggleSlotEnable(0);
+      assertEqual(w.FPBState.slotStates[0].enabled, false);
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+
+    it('handles enable failure', async () => {
+      w.FPBState.isConnected = true;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: true,
+          func: 'test',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      setFetchResponse('/api/fpb/enable', {
+        success: false,
+        message: 'Invalid comp',
+      });
+      await w.toggleSlotEnable(0);
+      assertTrue(
+        mockTerm._writes.some((wr) => wr.msg && wr.msg.includes('Failed')),
+      );
+      // State should not change on failure
+      assertEqual(w.FPBState.slotStates[0].enabled, true);
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+
+    it('handles fetch exception', async () => {
+      w.FPBState.isConnected = true;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: true,
+          func: 'test',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      const origFetch = browserGlobals.fetch;
+      browserGlobals.fetch = async () => {
+        throw new Error('Network error');
+      };
+      global.fetch = browserGlobals.fetch;
+      await w.toggleSlotEnable(0);
+      assertTrue(
+        mockTerm._writes.some((wr) => wr.msg && wr.msg.includes('error')),
+      );
+      browserGlobals.fetch = origFetch;
+      global.fetch = origFetch;
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+
+    it('logs success message on enable', async () => {
+      w.FPBState.isConnected = true;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: false,
+          func: 'test',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      setFetchResponse('/api/fpb/enable', { success: true });
+      await w.toggleSlotEnable(0);
+      assertTrue(
+        mockTerm._writes.some((wr) => wr.msg && wr.msg.includes('enabled')),
+      );
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+
+    it('logs success message on disable', async () => {
+      w.FPBState.isConnected = true;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: true,
+          func: 'test',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      setFetchResponse('/api/fpb/enable', { success: true });
+      await w.toggleSlotEnable(0);
+      assertTrue(
+        mockTerm._writes.some((wr) => wr.msg && wr.msg.includes('disabled')),
+      );
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+  });
+
+  describe('updateSlotUI - Enabled State', () => {
+    it('shows [OFF] for disabled occupied slots', () => {
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: false,
+          func: 'test_func',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+          code_size: 256,
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      w.updateSlotUI();
+      const funcSpan = browserGlobals.document.getElementById('slot0Func');
+      assertTrue(funcSpan.textContent.includes('[OFF]'));
+    });
+
+    it('does not show [OFF] for enabled occupied slots', () => {
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: true,
+          func: 'test_func',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+          code_size: 256,
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      w.updateSlotUI();
+      const funcSpan = browserGlobals.document.getElementById('slot0Func');
+      assertTrue(!funcSpan.textContent.includes('[OFF]'));
+    });
+
+    it('includes Status in title for occupied slots', () => {
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: true,
+          func: 'my_func',
+          orig_addr: '0x08001000',
+          target_addr: '0x20002000',
+          code_size: 512,
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      w.updateSlotUI();
+      const funcSpan = browserGlobals.document.getElementById('slot0Func');
+      assertTrue(funcSpan.title.includes('Status'));
+      assertTrue(funcSpan.title.includes('ON'));
+    });
+
+    it('adds slot-disabled-patch class for disabled occupied slots', () => {
+      const slotItem = browserGlobals.document.getElementById('slotItem0');
+      slotItem.classList.add('slot-item');
+      slotItem.dataset.slot = '0';
+      const actionsDiv = browserGlobals.document.createElement('div');
+      actionsDiv.classList.add('slot-actions');
+      slotItem.appendChild(actionsDiv);
+      const indicator = browserGlobals.document.createElement('span');
+      indicator.classList.add('slot-indicator');
+      slotItem.appendChild(indicator);
+      slotItem.querySelector = (sel) => {
+        if (sel === '.slot-actions') return actionsDiv;
+        if (sel === '.slot-indicator') return indicator;
+        return null;
+      };
+
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: false,
+          func: 'test',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+          code_size: 100,
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      w.updateSlotUI();
+      assertTrue(slotItem.classList._classes.has('slot-disabled-patch'));
+    });
+
+    it('removes slot-disabled-patch class for enabled occupied slots', () => {
+      const slotItem = browserGlobals.document.getElementById('slotItem0');
+      slotItem.classList.add('slot-item');
+      slotItem.classList.add('slot-disabled-patch');
+      slotItem.dataset.slot = '0';
+      const actionsDiv = browserGlobals.document.createElement('div');
+      actionsDiv.classList.add('slot-actions');
+      slotItem.appendChild(actionsDiv);
+      const indicator = browserGlobals.document.createElement('span');
+      indicator.classList.add('slot-indicator');
+      slotItem.appendChild(indicator);
+      slotItem.querySelector = (sel) => {
+        if (sel === '.slot-actions') return actionsDiv;
+        if (sel === '.slot-indicator') return indicator;
+        return null;
+      };
+
+      w.FPBState.slotStates = [
+        {
+          occupied: true,
+          enabled: true,
+          func: 'test',
+          orig_addr: '0x1000',
+          target_addr: '0x2000',
+          code_size: 100,
+        },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+        { occupied: false, enabled: true },
+      ];
+      w.updateSlotUI();
+      assertTrue(!slotItem.classList._classes.has('slot-disabled-patch'));
     });
   });
 };

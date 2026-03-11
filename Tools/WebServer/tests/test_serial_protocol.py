@@ -562,5 +562,65 @@ class TestEnhancedCRC(unittest.TestCase):
         self.assertEqual(combined, chained)
 
 
+class TestEnablePatch(unittest.TestCase):
+    """Tests for enable_patch method."""
+
+    def setUp(self):
+        self.device = MagicMock()
+        self.device.ser = MagicMock()
+        self.protocol = FPBProtocol(self.device)
+        self.protocol.send_cmd = MagicMock()
+        self.protocol.parse_response = MagicMock()
+
+    def test_enable_single_patch(self):
+        """enable_patch enables a single comparator."""
+        self.protocol.parse_response.return_value = {"ok": True, "msg": "Enabled 0"}
+        ok, msg = self.protocol.enable_patch(comp=0, enable=True)
+        self.assertTrue(ok)
+        self.protocol.send_cmd.assert_called_once_with("-c enable --comp 0 --enable 1")
+
+    def test_disable_single_patch(self):
+        """enable_patch disables a single comparator."""
+        self.protocol.parse_response.return_value = {"ok": True, "msg": "Disabled 0"}
+        ok, msg = self.protocol.enable_patch(comp=2, enable=False)
+        self.assertTrue(ok)
+        self.protocol.send_cmd.assert_called_once_with("-c enable --comp 2 --enable 0")
+
+    def test_enable_all_patches(self):
+        """enable_patch enables all comparators with --all flag."""
+        self.protocol.parse_response.return_value = {"ok": True, "msg": "Enabled all"}
+        ok, msg = self.protocol.enable_patch(enable=True, all=True)
+        self.assertTrue(ok)
+        self.protocol.send_cmd.assert_called_once_with("-c enable --enable 1 --all")
+
+    def test_disable_all_patches(self):
+        """enable_patch disables all comparators with --all flag."""
+        self.protocol.parse_response.return_value = {"ok": True, "msg": "Disabled all"}
+        ok, msg = self.protocol.enable_patch(enable=False, all=True)
+        self.assertTrue(ok)
+        self.protocol.send_cmd.assert_called_once_with("-c enable --enable 0 --all")
+
+    def test_enable_patch_failure(self):
+        """enable_patch returns failure from device."""
+        self.protocol.parse_response.return_value = {"ok": False, "msg": "Invalid comp"}
+        ok, msg = self.protocol.enable_patch(comp=99, enable=True)
+        self.assertFalse(ok)
+        self.assertEqual(msg, "Invalid comp")
+
+    def test_enable_patch_exception(self):
+        """enable_patch handles exceptions gracefully."""
+        self.protocol.send_cmd.side_effect = Exception("Serial error")
+        ok, msg = self.protocol.enable_patch(comp=0, enable=True)
+        self.assertFalse(ok)
+        self.assertIn("Serial error", msg)
+
+    def test_enable_patch_default_values(self):
+        """enable_patch uses default values (comp=0, enable=True, all=False)."""
+        self.protocol.parse_response.return_value = {"ok": True, "msg": "Enabled 0"}
+        ok, msg = self.protocol.enable_patch()
+        self.assertTrue(ok)
+        self.protocol.send_cmd.assert_called_once_with("-c enable --comp 0 --enable 1")
+
+
 if __name__ == "__main__":
     unittest.main()

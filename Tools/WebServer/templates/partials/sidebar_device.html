@@ -82,7 +82,11 @@
           onclick="selectSlot({{ i }})"
         >
           <div class="slot-header">
-            <span class="slot-indicator"></span>
+            <span
+              class="slot-indicator"
+              onclick="event.stopPropagation(); toggleSlotEnable({{ i }});"
+              title="Click to enable/disable patch"
+            ></span>
             <span class="slot-id" data-i18n="device.slot_n" data-i18n-options='{"n": {{ i }}}'>Slot {{ i }}</span>
             <span class="slot-func" id="slot{{ i }}Func">{% if i >= 6 %}v2 Only{% else %}Empty{% endif %}</span>
           </div>

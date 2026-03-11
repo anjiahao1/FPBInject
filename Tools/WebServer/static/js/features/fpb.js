@@ -177,6 +177,7 @@ async function fpbInfo(showPopup = false) {
           if (slotId < 8) {
             state.slotStates[slotId] = {
               occupied: slot.occupied || false,
+              enabled: slot.enabled !== undefined ? slot.enabled : true,
               func: slot.func || '',
               orig_addr: slot.orig_addr || '',
               target_addr: slot.target_addr || '',

@@ -193,6 +193,12 @@ class FPBInject:
         """Clear FPB patch."""
         return self._protocol.unpatch(comp, all)
 
+    def enable_patch(
+        self, comp: int = 0, enable: bool = True, all: bool = False
+    ) -> Tuple[bool, str]:
+        """Enable or disable FPB patch without clearing it."""
+        return self._protocol.enable_patch(comp, enable, all)
+
     def find_slot_for_target(self, target_addr: int) -> Tuple[int, bool]:
         """
         Find a suitable slot for the target address.
