@@ -203,8 +203,7 @@ void test_loader_cmd_hello(void) {
     int result = fl_exec_cmd(&test_ctx, 3, argv);
 
     TEST_ASSERT_EQUAL(0, result);
-    TEST_ASSERT(mock_output_contains("HELLO original"));
-    TEST_ASSERT(mock_output_contains("Hello from original fl_hello"));
+    TEST_ASSERT(mock_output_contains("HELLO from original fl_hello"));
 }
 
 void test_loader_cmd_hello_direct_call(void) {
@@ -214,7 +213,7 @@ void test_loader_cmd_hello_direct_call(void) {
     /* Call fl_hello directly to verify it is not inlined and is linkable */
     fl_hello();
 
-    TEST_ASSERT(mock_output_contains("HELLO original"));
+    TEST_ASSERT(mock_output_contains("HELLO from original fl_hello"));
 }
 
 void test_loader_cmd_ping(void) {
