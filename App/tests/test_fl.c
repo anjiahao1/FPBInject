@@ -1242,6 +1242,153 @@ void test_loader_cmd_run_no_alloc(void) {
 }
 
 /* ============================================================================
+ * fl_exec_cmd Tests - Enable Command
+ * ============================================================================ */
+
+void test_loader_cmd_enable_missing_arg(void) {
+    setup_loader();
+    fl_init(&test_ctx);
+
+    /* enable command without --enable argument should fail */
+    const char* argv[] = {"fl", "--cmd", "enable", "--comp", "0"};
+    int result = fl_exec_cmd(&test_ctx, 5, argv);
+
+    TEST_ASSERT(result != 0);
+    TEST_ASSERT(mock_output_contains("Missing --enable"));
+}
+
+void test_loader_cmd_enable_single_disable(void) {
+    setup_loader();
+    fl_init(&test_ctx);
+
+    /* First set up a patch */
+    const char* alloc_argv[] = {"fl", "--cmd", "alloc", "--size", "64"};
+    fl_exec_cmd(&test_ctx, 5, alloc_argv);
+
+    const char* patch_argv[]
+        = {"fl", "--cmd", "patch", "--comp", "0", "--orig", "0x08001000", "--target", "0x20000100"};
+    fl_exec_cmd(&test_ctx, 9, patch_argv);
+
+    mock_output_reset();
+
+    /* Disable the patch */
+    const char* argv[] = {"fl", "--cmd", "enable", "--comp", "0", "--enable", "0"};
+    int result = fl_exec_cmd(&test_ctx, 7, argv);
+
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT(mock_output_contains("Disabled patch 0"));
+}
+
+void test_loader_cmd_enable_single_enable(void) {
+    setup_loader();
+    fl_init(&test_ctx);
+
+    /* First set up a patch */
+    const char* alloc_argv[] = {"fl", "--cmd", "alloc", "--size", "64"};
+    fl_exec_cmd(&test_ctx, 5, alloc_argv);
+
+    const char* patch_argv[]
+        = {"fl", "--cmd", "patch", "--comp", "0", "--orig", "0x08001000", "--target", "0x20000100"};
+    fl_exec_cmd(&test_ctx, 9, patch_argv);
+
+    /* Disable first */
+    const char* disable_argv[] = {"fl", "--cmd", "enable", "--comp", "0", "--enable", "0"};
+    fl_exec_cmd(&test_ctx, 7, disable_argv);
+
+    mock_output_reset();
+
+    /* Re-enable the patch */
+    const char* argv[] = {"fl", "--cmd", "enable", "--comp", "0", "--enable", "1"};
+    int result = fl_exec_cmd(&test_ctx, 7, argv);
+
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT(mock_output_contains("Enabled patch 0"));
+}
+
+void test_loader_cmd_enable_all_disable(void) {
+    setup_loader();
+    fl_init(&test_ctx);
+
+    /* Set up multiple patches */
+    const char* alloc_argv[] = {"fl", "--cmd", "alloc", "--size", "64"};
+    fl_exec_cmd(&test_ctx, 5, alloc_argv);
+
+    const char* patch0_argv[]
+        = {"fl", "--cmd", "patch", "--comp", "0", "--orig", "0x08001000", "--target", "0x20000100"};
+    fl_exec_cmd(&test_ctx, 9, patch0_argv);
+
+    fl_exec_cmd(&test_ctx, 5, alloc_argv);
+    const char* patch1_argv[]
+        = {"fl", "--cmd", "patch", "--comp", "1", "--orig", "0x08002000", "--target", "0x20000200"};
+    fl_exec_cmd(&test_ctx, 9, patch1_argv);
+
+    mock_output_reset();
+
+    /* Disable all patches */
+    const char* argv[] = {"fl", "--cmd", "enable", "--enable", "0", "--all"};
+    int result = fl_exec_cmd(&test_ctx, 6, argv);
+
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT(mock_output_contains("Disabled"));
+    TEST_ASSERT(mock_output_contains("patches"));
+}
+
+void test_loader_cmd_enable_all_enable(void) {
+    setup_loader();
+    fl_init(&test_ctx);
+
+    /* Set up multiple patches */
+    const char* alloc_argv[] = {"fl", "--cmd", "alloc", "--size", "64"};
+    fl_exec_cmd(&test_ctx, 5, alloc_argv);
+
+    const char* patch0_argv[]
+        = {"fl", "--cmd", "patch", "--comp", "0", "--orig", "0x08001000", "--target", "0x20000100"};
+    fl_exec_cmd(&test_ctx, 9, patch0_argv);
+
+    fl_exec_cmd(&test_ctx, 5, alloc_argv);
+    const char* patch1_argv[]
+        = {"fl", "--cmd", "patch", "--comp", "1", "--orig", "0x08002000", "--target", "0x20000200"};
+    fl_exec_cmd(&test_ctx, 9, patch1_argv);
+
+    /* Disable all first */
+    const char* disable_argv[] = {"fl", "--cmd", "enable", "--enable", "0", "--all"};
+    fl_exec_cmd(&test_ctx, 6, disable_argv);
+
+    mock_output_reset();
+
+    /* Re-enable all patches */
+    const char* argv[] = {"fl", "--cmd", "enable", "--enable", "1", "--all"};
+    int result = fl_exec_cmd(&test_ctx, 6, argv);
+
+    TEST_ASSERT_EQUAL(0, result);
+    TEST_ASSERT(mock_output_contains("Enabled"));
+    TEST_ASSERT(mock_output_contains("patches"));
+}
+
+void test_loader_cmd_enable_invalid_comp(void) {
+    setup_loader();
+    fl_init(&test_ctx);
+
+    /* Try to enable invalid comparator */
+    const char* argv[] = {"fl", "--cmd", "enable", "--comp", "99", "--enable", "1"};
+    int result = fl_exec_cmd(&test_ctx, 7, argv);
+
+    TEST_ASSERT(result != 0 || mock_output_contains("Invalid"));
+}
+
+void test_loader_cmd_enable_unset_patch(void) {
+    setup_loader();
+    fl_init(&test_ctx);
+
+    /* Try to enable a patch that was never set - should succeed but report 0 changed */
+    const char* argv[] = {"fl", "--cmd", "enable", "--comp", "0", "--enable", "1"};
+    int result = fl_exec_cmd(&test_ctx, 7, argv);
+
+    /* fpb_enable_patch returns FPB_ERR_NOT_SET for unset patches, so changed=0 */
+    TEST_ASSERT_EQUAL(0, result);
+}
+
+/* ============================================================================
  * Test Runner
  * ============================================================================ */
 
@@ -1350,5 +1497,15 @@ void run_loader_tests(void) {
     RUN_TEST(test_loader_cmd_write_overflow_addr);
     RUN_TEST(test_loader_cmd_read_overflow_addr);
     RUN_TEST(test_loader_cmd_write_force_hint_in_error);
+    TEST_SUITE_END();
+
+    TEST_SUITE_BEGIN("func_loader - Enable Command");
+    RUN_TEST(test_loader_cmd_enable_missing_arg);
+    RUN_TEST(test_loader_cmd_enable_single_disable);
+    RUN_TEST(test_loader_cmd_enable_single_enable);
+    RUN_TEST(test_loader_cmd_enable_all_disable);
+    RUN_TEST(test_loader_cmd_enable_all_enable);
+    RUN_TEST(test_loader_cmd_enable_invalid_comp);
+    RUN_TEST(test_loader_cmd_enable_unset_patch);
     TEST_SUITE_END();
 }

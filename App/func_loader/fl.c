@@ -633,6 +633,32 @@ static void cmd_unpatch(fl_context_t* ctx, uint32_t comp, bool all) {
     }
 }
 
+static void cmd_enable(fl_context_t* ctx, uint32_t comp, bool enable, bool all) {
+    (void)ctx;
+    uint32_t num_comps = fpb_get_state()->num_code_comp;
+    uint32_t start = all ? 0 : comp;
+    uint32_t end = all ? num_comps : comp + 1;
+
+    if (!all && (comp >= num_comps || comp >= FL_MAX_SLOTS)) {
+        fl_response(false, "Invalid comp %lu", (unsigned long)comp);
+        return;
+    }
+
+    uint32_t changed = 0;
+    for (uint32_t i = start; i < end && i < FL_MAX_SLOTS; i++) {
+        fpb_result_t ret = fpb_enable_patch(i, enable);
+        if (ret == FPB_OK) {
+            changed++;
+        }
+    }
+
+    if (all) {
+        fl_response(true, "%s %u patches", enable ? "Enabled" : "Disabled", (unsigned)changed);
+    } else {
+        fl_response(true, "%s patch %lu", enable ? "Enabled" : "Disabled", (unsigned long)comp);
+    }
+}
+
 __attribute__((noinline)) void fl_hello(void) {
     fl_println("Hello from original fl_hello!");
     fl_println("Inject a new version to change this message.");
@@ -958,6 +984,7 @@ int fl_exec_cmd(fl_context_t* ctx, int argc, const char** argv) {
     int size = 0;
     int comp = 0;
     int all = 0;
+    int enable = -1; /* -1 = not specified, 0 = disable, 1 = enable */
     int force = 0;
     const char* path = NULL;
     const char* newpath = NULL;
@@ -975,6 +1002,7 @@ int fl_exec_cmd(fl_context_t* ctx, int argc, const char** argv) {
         OPT_POINTER(0, "orig", &orig, "Original addr", NULL, 0, 0),
         OPT_POINTER(0, "target", &target, "Target addr", NULL, 0, 0),
         OPT_BOOLEAN(0, "all", &all, "Clear all", NULL, 0, 0),
+        OPT_INTEGER(0, "enable", &enable, "Enable(1) or disable(0) patch", NULL, 0, 0),
         OPT_BOOLEAN(0, "force", &force, "Skip address range check", NULL, 0, 0),
         OPT_STRING(0, "path", &path, "File path", NULL, 0, 0),
         OPT_STRING(0, "newpath", &newpath, "New file path", NULL, 0, 0),
@@ -1043,6 +1071,12 @@ int fl_exec_cmd(fl_context_t* ctx, int argc, const char** argv) {
         cmd_dpatch(ctx, comp, orig, target, crc);
     } else if (strcmp(cmd, "unpatch") == 0) {
         cmd_unpatch(ctx, comp, all);
+    } else if (strcmp(cmd, "enable") == 0) {
+        if (enable < 0) {
+            fl_response(false, "Missing --enable (0 or 1)");
+            return -1;
+        }
+        cmd_enable(ctx, comp, enable != 0, all);
 #if FL_USE_FILE
         /* File transfer commands */
     } else if (strcmp(cmd, "fopen") == 0) {
