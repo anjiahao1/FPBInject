@@ -18,7 +18,10 @@
         "connect",
         "inject",
         "unpatch",
-        "disconnect"
+        "disconnect",
+        "mem_read",
+        "mem_write",
+        "mem_dump"
       ]
     }
   }

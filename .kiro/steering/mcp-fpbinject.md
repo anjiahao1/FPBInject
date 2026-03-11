@@ -4,7 +4,7 @@ inclusion: auto
 
 # FPBInject MCP Server
 
-项目内置 MCP server（`Tools/WebServer/fpb_mcp_server.py`），提供 14 个 tools 用于 ARM 固件分析和运行时注入。
+项目内置 MCP server（`Tools/WebServer/fpb_mcp_server.py`），提供 20 个 tools 用于 ARM 固件分析和运行时注入。
 
 ## Tools 一览
 
@@ -22,6 +22,12 @@ inclusion: auto
 | 在线 | `inject` | 注入补丁替换目标函数 |
 | 在线 | `unpatch` | 移除补丁（单个 slot 或全部） |
 | 在线 | `test_serial` | 测试串口吞吐量 |
+| 内存 | `mem_read` | 读取设备内存（hex dump / raw / u32 格式） |
+| 内存 | `mem_write` | 写入数据到设备内存地址 |
+| 内存 | `mem_dump` | 导出内存区域到本地二进制文件 |
+| 文件 | `file_list` | 列出设备文件系统目录 |
+| 文件 | `file_stat` | 获取文件/目录信息 |
+| 文件 | `file_download` | 从设备下载文件 |
 | 串口 | `serial_read` | 读取设备串口输出 |
 | 串口 | `serial_send` | 发送命令到设备 |
 

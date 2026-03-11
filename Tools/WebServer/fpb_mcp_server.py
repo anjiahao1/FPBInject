@@ -508,5 +508,65 @@ def file_download(
     return _capture_cli_output(cli.file_download, remote_path, local_path)
 
 
+# ============================================================
+# Memory Access Tools (device required)
+# ============================================================
+
+
+@mcp.tool()
+def mem_read(
+    addr: str,
+    length: int = 64,
+    fmt: str = "hex",
+    port: Optional[str] = None,
+) -> dict:
+    """Read device memory with hex dump output.
+
+    Args:
+        addr: Memory address (hex string, e.g. "0x2001E000")
+        length: Number of bytes to read (default: 64)
+        fmt: Output format - "hex" (dump with ASCII), "raw" (hex string), "u32" (32-bit words)
+        port: Serial port (uses existing connection if omitted)
+    """
+    cli = _get_cli(port=port)
+    return _capture_cli_output(cli.mem_read, int(addr, 0), length, fmt)
+
+
+@mcp.tool()
+def mem_write(
+    addr: str,
+    data_hex: str,
+    port: Optional[str] = None,
+) -> dict:
+    """Write hex data to device memory address.
+
+    Args:
+        addr: Memory address (hex string, e.g. "0x2001E000")
+        data_hex: Hex string of data to write (e.g. "DEADBEEF")
+        port: Serial port (uses existing connection if omitted)
+    """
+    cli = _get_cli(port=port)
+    return _capture_cli_output(cli.mem_write, int(addr, 0), data_hex)
+
+
+@mcp.tool()
+def mem_dump(
+    addr: str,
+    length: int,
+    local_path: str,
+    port: Optional[str] = None,
+) -> dict:
+    """Dump memory region to local binary file.
+
+    Args:
+        addr: Memory address (hex string, e.g. "0x2001E000")
+        length: Number of bytes to dump
+        local_path: Destination path on local machine (e.g., "/tmp/mem.bin")
+        port: Serial port (uses existing connection if omitted)
+    """
+    cli = _get_cli(port=port)
+    return _capture_cli_output(cli.mem_dump, int(addr, 0), length, local_path)
+
+
 if __name__ == "__main__":
     mcp.run()
