@@ -255,6 +255,7 @@ window.i18nResources['en'] = {
       slots_full_hint: 'This may be due to FPB Slots being full.',
       clear_slots_hint:
         'Please clear some Slots in DEVICE INFO panel and try again.',
+      auto_generated_patch_preview: 'Auto-generated patch (read-only preview)',
       // Serial test
       serial_test_complete: 'Serial Throughput Test Complete!',
       current_chunk_size: 'Current chunk size',

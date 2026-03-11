@@ -367,7 +367,7 @@ async function createPatchPreviewTab(funcName, sourceFile = null) {
     <div class="code-display" style="height: 100%; overflow: auto;">
       <div style="padding: 4px 8px; background: var(--vscode-editorWidget-background); border-bottom: 1px solid var(--vscode-panel-border); font-size: 11px; color: var(--vscode-descriptionForeground);">
         <i class="codicon codicon-lock" style="margin-right: 4px;"></i>
-        Auto-generated patch (read-only preview)
+        ${t('messages.auto_generated_patch_preview', 'Auto-generated patch (read-only preview)')}
       </div>
       <pre style="margin: 0; padding: 8px; height: calc(100% - 30px); overflow: auto;"><code class="language-c">${escapeHtml(patchContent)}</code></pre>
     </div>

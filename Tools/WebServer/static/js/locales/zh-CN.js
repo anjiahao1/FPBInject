@@ -250,6 +250,7 @@ window.i18nResources['zh-CN'] = {
       failed_functions: '失败的函数',
       slots_full_hint: '这可能是因为 FPB 槽位已满。',
       clear_slots_hint: '请在设备信息面板中清除一些槽位后重试。',
+      auto_generated_patch_preview: '自动生成的补丁（只读预览）',
       // 串口测试
       serial_test_complete: '串口吞吐测试完成！',
       current_chunk_size: '当前块大小',

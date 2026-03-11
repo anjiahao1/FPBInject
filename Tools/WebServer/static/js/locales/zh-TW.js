@@ -250,6 +250,7 @@ window.i18nResources['zh-TW'] = {
       failed_functions: '失敗的函式',
       slots_full_hint: '這可能是因為 FPB 槽位已滿。',
       clear_slots_hint: '請在裝置資訊面板中清除一些槽位後重試。',
+      auto_generated_patch_preview: '自動產生的補丁（唯讀預覽）',
       // 序列埠測試
       serial_test_complete: '序列埠吞吐測試完成！',
       current_chunk_size: '目前區塊大小',
