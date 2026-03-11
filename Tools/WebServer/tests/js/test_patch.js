@@ -533,6 +533,35 @@ module.exports = function (w) {
       );
       assertContains(template, 'Original: 0x08005000');
     });
+    it('sets Thumb bit (| 1) for ARM Cortex-M', () => {
+      const template = w.generatePatchTemplate(
+        'func',
+        0,
+        'void func(void)',
+        null,
+        null,
+        false,
+        '0x08001234',
+      );
+      /* Address should have | 1 for Thumb mode */
+      assertContains(template, '0x08001234 | 1');
+      assertContains(template, 'Thumb bit');
+    });
+    it('uses static const for function pointer', () => {
+      const template = w.generatePatchTemplate(
+        'test',
+        0,
+        'void test(void)',
+        null,
+        null,
+        false,
+        '0x08002000',
+      );
+      /* Should use static const, not #define */
+      assertContains(template, 'static');
+      assertContains(template, 'const');
+      assertTrue(!template.includes('#define ORIG_'));
+    });
   });
 
   describe('displayInjectionStats Function', () => {

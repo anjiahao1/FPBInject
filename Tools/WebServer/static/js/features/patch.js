@@ -132,8 +132,9 @@ ${processedBody}
     const argList = paramNames.join(', ');
     const macroName = `ORIG_${funcName.toUpperCase()}`;
     origFuncDef = `/* Original function pointer - call via ${macroName}() to avoid recursion */
+/* NOTE: | 1 sets Thumb bit for ARM Cortex-M */
 typedef ${returnType} (*${funcName}_fn_t)(${params || 'void'});
-static ${funcName}_fn_t const ${macroName} = (${funcName}_fn_t)${origAddr};
+static ${funcName}_fn_t const ${macroName} = (${funcName}_fn_t)(${origAddr} | 1);
 
 `;
     if (returnType === 'void') {
