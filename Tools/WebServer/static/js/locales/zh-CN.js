@@ -370,6 +370,7 @@ window.i18nResources['zh-CN'] = {
       reinject: '重新注入所有缓存的文件',
       clear_all: '清除所有 FPB 槽位',
       clear_slot: '清除槽位',
+      toggle_enable: '点击启用/禁用补丁',
       reinject_all: '重新注入全部 ({{count}} 个文件)',
       slot_original: '劫持地址',
       slot_target: '跳转地址',

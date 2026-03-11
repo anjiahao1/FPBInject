@@ -377,6 +377,7 @@ window.i18nResources['en'] = {
       reinject: 'Re-inject all cached files',
       clear_all: 'Clear all FPB slots',
       clear_slot: 'Clear slot',
+      toggle_enable: 'Click to enable/disable patch',
       reinject_all: 'Re-inject all ({{count}} files)',
       slot_original: 'Original',
       slot_target: 'Target',

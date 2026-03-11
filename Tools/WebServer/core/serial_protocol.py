@@ -399,6 +399,7 @@ class FPBProtocol:
                             pass
                     elif line.startswith("Slot["):
                         try:
+                            # Try full format with (COMP=..., on|off)
                             match = re.match(
                                 r"Slot\[(\d+)\]:\s*(0x[0-9A-Fa-f]+)\s*->\s*(0x[0-9A-Fa-f]+),\s*(\d+)\s*bytes.*\(.*,\s*(on|off)\)",
                                 line,
@@ -419,7 +420,28 @@ class FPBProtocol:
                                         "code_size": code_size,
                                     }
                                 )
-                            elif "empty" in line:
+                            elif "empty" not in line:
+                                # Try simple format without (COMP=..., on|off)
+                                match = re.match(
+                                    r"Slot\[(\d+)\]:\s*(0x[0-9A-Fa-f]+)\s*->\s*(0x[0-9A-Fa-f]+),\s*(\d+)\s*bytes",
+                                    line,
+                                )
+                                if match:
+                                    slot_id = int(match.group(1))
+                                    orig_addr = int(match.group(2), 16)
+                                    target_addr = int(match.group(3), 16)
+                                    code_size = int(match.group(4))
+                                    info["slots"].append(
+                                        {
+                                            "id": slot_id,
+                                            "occupied": True,
+                                            "enabled": True,
+                                            "orig_addr": orig_addr,
+                                            "target_addr": target_addr,
+                                            "code_size": code_size,
+                                        }
+                                    )
+                            if "empty" in line:
                                 match = re.match(r"Slot\[(\d+)\]:", line)
                                 if match:
                                     slot_id = int(match.group(1))

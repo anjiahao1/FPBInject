@@ -85,7 +85,7 @@
             <span
               class="slot-indicator"
               onclick="event.stopPropagation(); toggleSlotEnable({{ i }});"
-              title="Click to enable/disable patch"
+              data-i18n="[title]tooltips.toggle_enable"
             ></span>
             <span class="slot-id" data-i18n="device.slot_n" data-i18n-options='{"n": {{ i }}}'>Slot {{ i }}</span>
             <span class="slot-func" id="slot{{ i }}Func">{% if i >= 6 %}v2 Only{% else %}Empty{% endif %}</span>
