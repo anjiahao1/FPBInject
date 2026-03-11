@@ -129,10 +129,9 @@ ${processedBody}
   let callOrigSection = '';
   let origFuncDef = '';
   if (hasOrigAddr) {
-    const fnPtrType = `${returnType} (*)(${params || 'void'})`;
     const argList = paramNames.join(', ');
     origFuncDef = `/* Original function pointer - call via ORIG_${funcName.toUpperCase()}() to avoid recursion */
-typedef ${fnPtrType} ${funcName}_fn_t;
+typedef ${returnType} (*${funcName}_fn_t)(${params || 'void'});
 #define ORIG_${funcName.toUpperCase()} ((${funcName}_fn_t)${origAddr})
 
 `;
