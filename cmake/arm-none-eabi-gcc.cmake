@@ -53,10 +53,10 @@ set(COMMON_FLAGS "${COMMON_FLAGS} -Wall -Wextra -Werror")
 
 # C 编译标志
 set(CMAKE_C_FLAGS
-    "${COMMON_FLAGS} -std=c11"
+    "${COMMON_FLAGS} -std=c11 -g3 -gdwarf-4"
     CACHE STRING "" FORCE)
 set(CMAKE_C_FLAGS_DEBUG
-    "-O0 -g3 -DDEBUG"
+    "-O0 -DDEBUG"
     CACHE STRING "" FORCE)
 set(CMAKE_C_FLAGS_RELEASE
     "-O2 -DNDEBUG"
@@ -67,10 +67,10 @@ set(CMAKE_C_FLAGS_MINSIZEREL
 
 # C++ 编译标志
 set(CMAKE_CXX_FLAGS
-    "${COMMON_FLAGS} -std=c++17 -fno-rtti -fno-exceptions"
+    "${COMMON_FLAGS} -std=c++17 -fno-rtti -fno-exceptions -g3 -gdwarf-4"
     CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_DEBUG
-    "-O0 -g3 -DDEBUG"
+    "-O0 -DDEBUG"
     CACHE STRING "" FORCE)
 set(CMAKE_CXX_FLAGS_RELEASE
     "-O2 -DNDEBUG"
