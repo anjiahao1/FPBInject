@@ -95,6 +95,8 @@ function generatePatchTemplate(
   }
 
   const paramNames = extractParamNames(params);
+  /* Ensure params have names for function definition */
+  params = addParamNamesToSignature(params, paramNames);
   const hasDecompiled = !!decompiled;
   const hasOrigAddr = !!origAddr;
 
@@ -242,6 +244,79 @@ function parseSignature(signature, funcName) {
   return { returnType, params };
 }
 
+/**
+ * Add parameter names to a signature that may only have types.
+ * E.g., "uint8_t, uint8_t" -> "uint8_t arg0, uint8_t arg1"
+ * @param {string} params - Parameter string (may be types only)
+ * @param {string[]} paramNames - Generated parameter names
+ * @returns {string} Parameters with names
+ */
+function addParamNamesToSignature(params, paramNames) {
+  if (!params || params.trim() === '' || params.toLowerCase() === 'void') {
+    return params;
+  }
+
+  const parts = [];
+  let depth = 0;
+  let current = '';
+
+  for (const ch of params) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    else if (ch === ',' && depth === 0) {
+      parts.push(current.trim());
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current.trim()) {
+    parts.push(current.trim());
+  }
+
+  const result = parts.map((part, i) => {
+    const name = paramNames[i] || `arg${i}`;
+    /* Check if part already has a name (not just a type) */
+    const words = part.replace(/[*&]/g, ' ').trim().split(/\s+/);
+    const lastWord = words[words.length - 1];
+
+    /* If last word is a type keyword or stdint type, add name */
+    const typeKeywords = [
+      'int',
+      'char',
+      'void',
+      'float',
+      'double',
+      'long',
+      'short',
+      'unsigned',
+      'signed',
+      'const',
+      'volatile',
+      'struct',
+      'enum',
+      'union',
+      'bool',
+      'size_t',
+      'ssize_t',
+      'ptrdiff_t',
+      'intptr_t',
+      'uintptr_t',
+    ];
+    const isType =
+      typeKeywords.includes(lastWord) ||
+      /^u?int\d+_t$/.test(lastWord) ||
+      (/_t$/.test(lastWord) && lastWord.length > 2);
+
+    if (isType) {
+      return `${part} ${name}`;
+    }
+    return part;
+  });
+
+  return result.join(', ');
+}
+
 function extractParamNames(params) {
   if (!params || params.trim() === '' || params.toLowerCase() === 'void') {
     return [];
@@ -266,9 +341,45 @@ function extractParamNames(params) {
     parts.push(current.trim());
   }
 
-  for (const part of parts) {
+  /* Common C type keywords and patterns */
+  const typeKeywords = [
+    'int',
+    'char',
+    'void',
+    'float',
+    'double',
+    'long',
+    'short',
+    'unsigned',
+    'signed',
+    'const',
+    'volatile',
+    'struct',
+    'enum',
+    'union',
+    'bool',
+    'size_t',
+    'ssize_t',
+    'ptrdiff_t',
+    'intptr_t',
+    'uintptr_t',
+  ];
+
+  /* Check if a word looks like a type name */
+  const isTypeName = (word) => {
+    if (typeKeywords.includes(word)) return true;
+    /* Match stdint types: uint8_t, int32_t, etc. */
+    if (/^u?int\d+_t$/.test(word)) return true;
+    /* Match _t suffix types (common convention) */
+    if (/_t$/.test(word) && word.length > 2) return true;
+    return false;
+  };
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+
     const arrayMatch = part.match(/(\w+)\s*\[/);
-    if (arrayMatch) {
+    if (arrayMatch && !isTypeName(arrayMatch[1])) {
       names.push(arrayMatch[1]);
       continue;
     }
@@ -282,27 +393,14 @@ function extractParamNames(params) {
     const words = part.replace(/[*&]/g, ' ').trim().split(/\s+/);
     if (words.length > 0) {
       const lastWord = words[words.length - 1];
-      if (
-        ![
-          'int',
-          'char',
-          'void',
-          'float',
-          'double',
-          'long',
-          'short',
-          'unsigned',
-          'signed',
-          'const',
-          'volatile',
-          'struct',
-          'enum',
-          'union',
-        ].includes(lastWord)
-      ) {
+      if (!isTypeName(lastWord)) {
         names.push(lastWord);
+        continue;
       }
     }
+
+    /* No valid name found - generate synthetic name */
+    names.push(`arg${i}`);
   }
 
   return names;

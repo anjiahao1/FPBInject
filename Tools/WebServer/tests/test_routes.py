@@ -9,7 +9,7 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock, patch, mock_open
+from unittest.mock import Mock, MagicMock, patch, mock_open
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -1846,34 +1846,38 @@ class TestSymbolsAPI(TestRoutesBase):
         self.assertFalse(data["success"])
         self.assertIn("not specified", data["error"].lower())
 
-    @patch("core.patch_generator.find_function_signature")
-    def test_get_signature_found(self, mock_find):
-        """Test getting signature when found"""
-        mock_find.return_value = "void test_func(int a, int b)"
-
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create a source file
-            src_file = os.path.join(tmpdir, "test.c")
-            with open(src_file, "w") as f:
-                f.write("void test_func(int a, int b) {}")
-
-            state.device.watch_dirs = [tmpdir]
-
+    @patch("core.gdb_manager.is_gdb_available")
+    def test_get_signature_found(self, mock_gdb_avail):
+        """Test getting signature via GDB"""
+        mock_gdb_avail.return_value = True
+        mock_session = MagicMock()
+        mock_session.get_function_signature.return_value = "void test_func(int, int)"
+        state.gdb_session = mock_session
+        try:
             response = self.client.get("/api/symbols/signature?func=test_func")
             data = json.loads(response.data)
 
             self.assertTrue(data["success"])
             self.assertIn("signature", data)
+            self.assertEqual(data["source"], "gdb")
+        finally:
+            state.gdb_session = None
 
-    def test_get_signature_not_found(self):
+    @patch("core.gdb_manager.is_gdb_available")
+    def test_get_signature_not_found(self, mock_gdb_avail):
         """Test getting signature when not found"""
-        state.device.watch_dirs = []
+        mock_gdb_avail.return_value = True
+        mock_session = MagicMock()
+        mock_session.get_function_signature.return_value = None
+        state.gdb_session = mock_session
+        try:
+            response = self.client.get("/api/symbols/signature?func=nonexistent_func")
+            data = json.loads(response.data)
 
-        response = self.client.get("/api/symbols/signature?func=nonexistent_func")
-        data = json.loads(response.data)
-
-        self.assertFalse(data["success"])
-        self.assertIn("not found", data["error"].lower())
+            self.assertFalse(data["success"])
+            self.assertIn("not found", data["error"].lower())
+        finally:
+            state.gdb_session = None
 
     def test_disasm_no_func(self):
         """Test disassembly without function name"""

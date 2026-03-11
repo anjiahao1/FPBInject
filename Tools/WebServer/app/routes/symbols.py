@@ -567,61 +567,22 @@ def api_reload_symbols():
 
 @bp.route("/symbols/signature", methods=["GET"])
 def api_get_function_signature():
-    """Get function signature by searching source files."""
+    """Get function signature via GDB ptype (requires DWARF debug info)."""
     func_name = request.args.get("func", "")
     if not func_name:
         return jsonify({"success": False, "error": "Function name not specified"})
 
-    device = state.device
+    from core.gdb_manager import is_gdb_available
 
-    # Try to find function signature from watch directories
     signature = None
-    source_file = None
 
-    # Search in watch directories (make a copy to avoid modifying original)
-    watch_dirs = list(device.watch_dirs) if device.watch_dirs else []
+    # Try GDB session first (if connected)
+    if is_gdb_available(state) and state.gdb_session:
+        signature = state.gdb_session.get_function_signature(func_name)
 
-    from core.patch_generator import find_function_signature
-
-    for watch_dir in watch_dirs:
-        if not os.path.isdir(watch_dir):
-            continue
-
-        # Search for C/C++ files
-        for root, dirs, files in os.walk(watch_dir):
-            # Skip common non-source directories
-            dirs[:] = [
-                d
-                for d in dirs
-                if d not in [".git", "build", "out", "__pycache__", "node_modules"]
-            ]
-
-            for filename in files:
-                if not filename.endswith((".c", ".cpp", ".h", ".hpp")):
-                    continue
-
-                filepath = os.path.join(root, filename)
-                try:
-                    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
-
-                    # Quick check if function name exists in file
-                    if func_name not in content:
-                        continue
-
-                    # Find function signature
-                    sig = find_function_signature(content, func_name)
-                    if sig:
-                        signature = sig
-                        source_file = filepath
-                        break
-                except Exception:
-                    continue
-
-            if signature:
-                break
-        if signature:
-            break
+    # Fallback: use gdb batch mode (offline, no target needed)
+    if not signature and state.device.elf_path:
+        signature = _get_signature_via_gdb_batch(state.device.elf_path, func_name)
 
     if signature:
         return jsonify(
@@ -629,17 +590,62 @@ def api_get_function_signature():
                 "success": True,
                 "func": func_name,
                 "signature": signature,
-                "source_file": source_file,
+                "source": "gdb",
             }
         )
     else:
         return jsonify(
             {
                 "success": False,
-                "error": f"Function '{func_name}' not found in source files",
+                "error": f"Function '{func_name}' not found or no debug info",
                 "func": func_name,
             }
         )
+
+
+def _get_signature_via_gdb_batch(elf_path: str, func_name: str):
+    """Get function signature using gdb in batch mode (no target connection needed)."""
+    import re
+    import shutil
+    import subprocess
+
+    # Find gdb executable
+    gdb_path = shutil.which("gdb-multiarch") or shutil.which("arm-none-eabi-gdb")
+    if not gdb_path:
+        return None
+
+    try:
+        result = subprocess.run(
+            [
+                gdb_path,
+                "-batch",
+                "-ex",
+                f"file {elf_path}",
+                "-ex",
+                f"ptype {func_name}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10.0,
+        )
+        output = result.stdout.strip()
+        if not output or "No symbol" in output:
+            return None
+
+        # Parse "type = <return_type> (<params>)" format
+        m = re.match(r"type\s*=\s*(.+?)\s*\(([^)]*)\)", output)
+        if not m:
+            return None
+
+        ret_type = m.group(1).strip()
+        params = m.group(2).strip()
+
+        if params == "":
+            params = "void"
+
+        return f"{ret_type} {func_name}({params})"
+    except Exception:
+        return None
 
 
 @bp.route("/symbols/disasm", methods=["GET"])

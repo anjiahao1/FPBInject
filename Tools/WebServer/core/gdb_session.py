@@ -304,6 +304,45 @@ class GDBSession:
         with self._lock:
             return self._read_symbol_value_impl(sym_name)
 
+    def get_function_signature(self, func_name: str) -> Optional[str]:
+        """Get function signature via GDB 'ptype'.
+
+        Args:
+            func_name: Function name to look up
+
+        Returns:
+            Function signature string (e.g., "void digitalWrite(uint8_t, uint8_t)")
+            or None if not found or not a function.
+        """
+        if not self.is_alive:
+            return None
+        with self._lock:
+            return self._get_function_signature_impl(func_name)
+
+    def _get_function_signature_impl(self, func_name: str) -> Optional[str]:
+        """Internal implementation of get_function_signature."""
+        output = self._execute_cli(f"ptype {func_name}")
+        if not output:
+            return None
+
+        # Parse "type = <return_type> (<params>)" format
+        # Examples:
+        #   type = void (uint8_t, uint8_t)
+        #   type = int (const char *, ...)
+        #   type = void (void)
+        m = re.match(r"type\s*=\s*(.+?)\s*\(([^)]*)\)", output.strip())
+        if not m:
+            return None
+
+        ret_type = m.group(1).strip()
+        params = m.group(2).strip()
+
+        # Build signature: "ret_type func_name(params)"
+        if params == "":
+            params = "void"
+
+        return f"{ret_type} {func_name}({params})"
+
     def read_symbol_value_and_layout(
         self, sym_name: str
     ) -> Tuple[Optional[bytes], Optional[List[dict]]]:

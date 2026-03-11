@@ -6,7 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -251,44 +251,47 @@ class TestSignatureEndpoint(SymbolRoutesBase):
         self.assertFalse(data["success"])
         self.assertIn("not specified", data["error"])
 
-    @patch("core.patch_generator.find_function_signature")
-    def test_signature_found_in_watch_dir(self, mock_find_sig):
-        """Finds signature in watch directory."""
-        mock_find_sig.return_value = "void test_func(int arg)"
-        with tempfile.TemporaryDirectory() as tmpdir:
-            src_file = os.path.join(tmpdir, "test.c")
-            with open(src_file, "w") as f:
-                f.write("void test_func(int arg) { }")
-            state.device.watch_dirs = [tmpdir]
+    @patch("core.gdb_manager.is_gdb_available")
+    def test_signature_found_via_gdb(self, mock_gdb_avail):
+        """Finds signature via GDB ptype."""
+        mock_gdb_avail.return_value = True
+        mock_session = MagicMock()
+        mock_session.get_function_signature.return_value = "void test_func(int)"
+        state.gdb_session = mock_session
+        try:
             response = self.client.get("/api/symbols/signature?func=test_func")
             data = response.get_json()
             self.assertTrue(data["success"])
-            self.assertEqual(data["signature"], "void test_func(int arg)")
+            self.assertEqual(data["signature"], "void test_func(int)")
+            self.assertEqual(data["source"], "gdb")
+        finally:
+            state.gdb_session = None
 
-    def test_signature_not_found(self):
-        state.device.watch_dirs = []
-        state.device.elf_path = ""
-        response = self.client.get("/api/symbols/signature?func=nonexistent")
+    @patch("core.gdb_manager.is_gdb_available")
+    def test_signature_not_found(self, mock_gdb_avail):
+        """Returns error when GDB cannot find function."""
+        mock_gdb_avail.return_value = True
+        mock_session = MagicMock()
+        mock_session.get_function_signature.return_value = None
+        state.gdb_session = mock_session
+        try:
+            response = self.client.get("/api/symbols/signature?func=nonexistent")
+            data = response.get_json()
+            self.assertFalse(data["success"])
+            self.assertIn("not found", data["error"])
+        finally:
+            state.gdb_session = None
+
+    @patch("core.gdb_manager.is_gdb_available")
+    def test_signature_gdb_not_available(self, mock_gdb_avail):
+        """Returns error when GDB session not available and no ELF."""
+        mock_gdb_avail.return_value = False
+        state.gdb_session = None
+        state.device.elf_path = ""  # No ELF for batch fallback
+        response = self.client.get("/api/symbols/signature?func=test_func")
         data = response.get_json()
         self.assertFalse(data["success"])
         self.assertIn("not found", data["error"])
-
-    @patch("core.patch_generator.find_function_signature")
-    def test_signature_searches_elf_parent_dirs(self, mock_find_sig):
-        """Searches parent directories of ELF path."""
-        mock_find_sig.return_value = None
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Deep nesting so ../../.. stays within tmpdir
-            build_dir = os.path.join(tmpdir, "root", "project", "build")
-            os.makedirs(build_dir)
-            elf_path = os.path.join(build_dir, "test.elf")
-            with open(elf_path, "w") as f:
-                f.write("")
-            state.device.elf_path = elf_path
-            state.device.watch_dirs = []
-            response = self.client.get("/api/symbols/signature?func=test_func")
-            data = response.get_json()
-            self.assertFalse(data["success"])
 
 
 class TestDisasmEndpoint(SymbolRoutesBase):
