@@ -21,6 +21,7 @@ import importlib
 import importlib.metadata
 import logging
 import os
+import secrets
 import shutil
 import socket
 import subprocess
@@ -143,14 +144,25 @@ def check_toolchain():
     return True
 
 
-def create_app():
-    """Create and configure the Flask application."""
+def create_app(auth_token=None):
+    """Create and configure the Flask application.
+
+    Args:
+        auth_token: If provided, enable token-based auth for non-localhost access.
+                    If None, no authentication is required (--no-auth mode).
+    """
     app = Flask(
         __name__,
         template_folder=os.path.join(SCRIPT_DIR, "templates"),
         static_folder=os.path.join(SCRIPT_DIR, "static"),
     )
     CORS(app)
+
+    if auth_token:
+        from app.middleware import init_auth
+
+        init_auth(app, auth_token)
+
     register_routes(app)
     return app
 
@@ -199,6 +211,11 @@ def parse_args():
         "--no-browser",
         action="store_true",
         help="Do not auto-open browser on startup",
+    )
+    parser.add_argument(
+        "--no-auth",
+        action="store_true",
+        help="Disable token authentication for non-localhost access",
     )
     return parser.parse_args()
 
@@ -293,7 +310,10 @@ def main():
             logger.error("   Or use --skip-port-check to force start (not recommended)")
             sys.exit(1)
 
-    app = create_app()
+    # Generate auth token
+    token = None if args.no_auth else secrets.token_hex(4)
+
+    app = create_app(auth_token=token)
 
     # Restore previous state (auto-connect)
     restore_state()
@@ -307,13 +327,18 @@ def main():
     except Exception:
         lan_ip = "unavailable"
     lan_url = f"http://{lan_ip}:{args.port}"
+    network_url = f"{lan_url}?token={token}" if token else lan_url
 
     logger.info("")
     logger.info("  ╔══════════════════════════════════════════════╗")
     logger.info("  ║        FPBInject Web Server Started          ║")
     logger.info("  ╠══════════════════════════════════════════════╣")
     logger.info(f"  ║  🏠 Local:   {local_url:<32s}║")
-    logger.info(f"  ║  🌐 Network: {lan_url:<32s}║")
+    logger.info(f"  ║  🌐 Network: {network_url:<32s}║")
+    if token:
+        logger.info(f"  ║  🔑 Token:   {token:<32s}║")
+    else:
+        logger.info("  ║  ⚠️  Auth:    disabled (--no-auth)          ║")
     logger.info("  ╚══════════════════════════════════════════════╝")
     logger.info("")
 

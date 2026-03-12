@@ -52,6 +52,17 @@
     if (clock) clock.innerText = timeString;
   }
 
+  // Auth token: extract from URL, persist to cookie, clean URL
+  (function() {
+    const urlToken = new URLSearchParams(location.search).get('token');
+    if (urlToken) {
+      document.cookie = `fpbinject_token=${urlToken}; path=/; SameSite=Lax`;
+      const url = new URL(location);
+      url.searchParams.delete('token');
+      history.replaceState(null, '', url);
+    }
+  })();
+
   document.addEventListener("DOMContentLoaded", () => {
     // Initialize i18n first (async, will translate page when ready)
     const savedLang = localStorage.getItem("fpbinject_ui_language") || "en";
