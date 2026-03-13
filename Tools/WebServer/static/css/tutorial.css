@@ -53,8 +53,11 @@
   animation: tutorial-pulse 2s ease-in-out infinite;
 }
 
-/* Button-specific highlight: flash background color */
-button.tutorial-highlight-target {
+/* Element-specific highlight: flash background color */
+button.tutorial-highlight-target,
+select.tutorial-highlight-target,
+input.tutorial-highlight-target,
+.panel-tab.tutorial-highlight-target {
   outline: none;
   box-shadow: none;
   animation: tutorial-btn-pulse 1s ease-in-out infinite;

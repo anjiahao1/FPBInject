@@ -15,6 +15,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'connection',
     sidebar: 'details-connection',
+    blink: '#portSelect',
     gate: () => !!(window.FPBState && window.FPBState.isConnected),
     gateHint: 'tutorial.gate_connection',
     gateOk: 'tutorial.gate_connection_ok',
@@ -22,6 +23,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'device',
     sidebar: 'details-device',
+    blink: '#btnThroughput',
     gate: () => !!(window.FPBState && window.FPBState.throughputTested),
     gateHint: 'tutorial.gate_device',
     gateOk: 'tutorial.gate_device_ok',
@@ -56,6 +58,7 @@ const TUTORIAL_STEPS = [
   {
     id: 'hello_search',
     sidebar: 'details-symbols',
+    blink: '#symbolSearch',
     gate: () => {
       const tabs = document.querySelectorAll('#editorTabsHeader .tab');
       return Array.from(tabs).some((t) => t.textContent.includes('fl_hello'));
@@ -78,6 +81,7 @@ const TUTORIAL_STEPS = [
     id: 'hello_verify',
     sidebar: null,
     highlight: '#panelContainer',
+    blink: '#tabBtnRaw',
     gate: () => {
       const rawBtn = document.getElementById('tabBtnRaw');
       return rawBtn && rawBtn.classList.contains('active');
@@ -102,6 +106,7 @@ let tutorialStep = 0;
 let tutorialActive = false;
 let tutorialStepConfigured = {};
 let currentHighlightedElement = null;
+let currentBlinkElement = null;
 let tutorialGatePollTimer = null;
 let tutorialDraggedByUser = false;
 
@@ -145,6 +150,14 @@ function clearHighlight() {
       'tutorial-highlight-pulse',
     );
     currentHighlightedElement = null;
+  }
+
+  if (currentBlinkElement) {
+    currentBlinkElement.classList.remove(
+      'tutorial-highlight-target',
+      'tutorial-highlight-pulse',
+    );
+    currentBlinkElement = null;
   }
 
   clearConfigGateHighlights();
@@ -352,6 +365,19 @@ function renderTutorialStep() {
     activateSidebarForStep(step.sidebar);
     setTimeout(() => {
       highlightElement(`#${step.sidebar}`);
+      if (step.blink) {
+        const { passed } = getStepGateStatus(step);
+        if (!passed) {
+          const blinkEl = document.querySelector(step.blink);
+          if (blinkEl) {
+            blinkEl.classList.add(
+              'tutorial-highlight-target',
+              'tutorial-highlight-pulse',
+            );
+            currentBlinkElement = blinkEl;
+          }
+        }
+      }
       positionModalNearTarget(`#${step.sidebar}`);
       // Wait for modal transition (350ms) before calculating arrow angle
       setTimeout(() => updateGateBannerArrow(), 400);
@@ -363,6 +389,19 @@ function renderTutorialStep() {
   } else if (step.highlight) {
     setTimeout(() => {
       highlightNonSidebarElement(step.highlight);
+      if (step.blink) {
+        const { passed } = getStepGateStatus(step);
+        if (!passed) {
+          const blinkEl = document.querySelector(step.blink);
+          if (blinkEl) {
+            blinkEl.classList.add(
+              'tutorial-highlight-target',
+              'tutorial-highlight-pulse',
+            );
+            currentBlinkElement = blinkEl;
+          }
+        }
+      }
       positionModalNearTarget(step.highlight);
       setTimeout(() => updateGateBannerArrow(), 400);
     }, 300);
