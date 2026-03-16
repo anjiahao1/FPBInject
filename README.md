@@ -139,7 +139,26 @@ void digitalWrite(uint8_t pin, uint8_t value) {
 }
 ```
 
-> Calling the original function from injected code is not supported — the FPB redirect applies to all callers, so it would cause infinite recursion.
+> To call the original function from injected code, you need two things: a function pointer pointing directly at the original address (bypassing the FPB redirect), and temporarily disabling the patch around the call. Direct calls by name will still be intercepted by FPB and cause infinite recursion.
+>
+> ```c
+> /* Define a function pointer to the original address (| 1 sets the Thumb bit) */
+> typedef void (*digitalWrite_fn_t)(uint8_t, uint8_t);
+> static digitalWrite_fn_t const ORIG_DIGITALWRITE = (digitalWrite_fn_t)(0x08001234 | 1);
+>
+> /* FPB_INJECT */
+> __attribute__((section(".fpb.text"), used))
+> void digitalWrite(uint8_t pin, uint8_t value) {
+>     printf("Patched: pin=%d val=%d\n", pin, value);
+>
+>     /* Disable patch -> call original via pointer -> re-enable */
+>     fpb_enable_patch(0, false);
+>     ORIG_DIGITALWRITE(pin, value);
+>     fpb_enable_patch(0, true);
+> }
+> ```
+>
+> The workbench generates this pattern automatically when the original function address is known.
 
 ## Supported Hardware
 

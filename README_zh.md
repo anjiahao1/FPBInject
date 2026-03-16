@@ -139,7 +139,26 @@ void digitalWrite(uint8_t pin, uint8_t value) {
 }
 ```
 
-> 不支持在注入代码中调用原始函数 — FPB 重定向对所有调用者生效，会导致无限递归。
+> 如需在注入代码中调用原始函数，需要两步配合：用函数指针直接指向原始地址（绕过 FPB 重定向），同时在调用前后用 `fpb_enable_patch` 临时禁用补丁。直接按函数名调用仍会被 FPB 拦截，导致无限递归。
+>
+> ```c
+> /* 定义指向原始地址的函数指针（| 1 设置 Thumb bit） */
+> typedef void (*digitalWrite_fn_t)(uint8_t, uint8_t);
+> static digitalWrite_fn_t const ORIG_DIGITALWRITE = (digitalWrite_fn_t)(0x08001234 | 1);
+>
+> /* FPB_INJECT */
+> __attribute__((section(".fpb.text"), used))
+> void digitalWrite(uint8_t pin, uint8_t value) {
+>     printf("Patched: pin=%d val=%d\n", pin, value);
+>
+>     /* 禁用补丁 -> 通过指针调用原始函数 -> 恢复补丁 */
+>     fpb_enable_patch(0, false);
+>     ORIG_DIGITALWRITE(pin, value);
+>     fpb_enable_patch(0, true);
+> }
+> ```
+>
+> 工作台在已知原始函数地址时会自动生成上述模板。
 
 ## 支持的硬件
 
