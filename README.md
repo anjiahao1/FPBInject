@@ -8,9 +8,9 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/FASTSHIFT/FPBInject)
 [![CI](https://github.com/FASTSHIFT/FPBInject/actions/workflows/ci.yml/badge.svg)](https://github.com/FASTSHIFT/FPBInject/actions/workflows/ci.yml)
 
-Fixing firmware the old way is like pulling over and swapping the engine just to change a spark plug. FPBInject lets you work on the engine while the car is still running — replace any function on a live MCU through a serial cable, no reflashing, no debugger, no downtime.
+Runtime code injection for ARM Cortex-M. Replace any function on a running MCU through a serial connection — no reflashing, no debugger, no downtime.
 
-Under the hood, it uses the ARM [Flash Patch and Breakpoint (FPB)](https://developer.arm.com/documentation/ddi0337/h/debug/about-the-flash-patch-and-breakpoint-unit--fpb-) hardware unit to intercept function calls and redirect them to your custom code in RAM. The original Flash stays untouched — think of it as a detour sign the CPU follows at wire speed.
+FPBInject uses the [Flash Patch and Breakpoint (FPB)](https://developer.arm.com/documentation/ddi0337/h/debug/about-the-flash-patch-and-breakpoint-unit--fpb-) hardware unit to intercept function calls and redirect them to your custom code in RAM, while the original Flash stays untouched.
 
 ![FPBInject Workbench](Docs/images/webserver-overview.png)
 
