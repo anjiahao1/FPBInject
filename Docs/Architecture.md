@@ -378,35 +378,6 @@ flowchart LR
 | SP+24 | PC | ← MODIFIED to patched_func |
 | SP+28 | xPSR | preserved |
 
-### 3. Hook Mode (Non-replacing)
-
-Best for: Instrumentation without changing execution flow
-
-```mermaid
-flowchart TB
-    subgraph Normal["Normal Execution"]
-        A["instruction @ 0x08001234"]
-        B["next instruction"]
-    end
-    
-    subgraph Hook["Hook Triggered"]
-        C["FPB Breakpoint"]
-        D["DebugMonitor"]
-        E["Call hook_func()"]
-        F["Return & Continue"]
-    end
-    
-    A --> C
-    C --> D --> E --> F
-    F --> B
-```
-
-**How it works:**
-1. FPB breakpoint triggers at specified address
-2. DebugMonitor calls hook function (void -> void)
-3. Execution continues at next instruction
-4. Original code flow unchanged
-
 ### 3. Direct Mode
 
 For special cases with direct RAM REMAP support.
@@ -474,47 +445,78 @@ arm-none-eabi-objcopy -O binary patch.elf patch.bin
 
 ### Serial Commands
 
-| Command | Description |
-|---------|-------------|
-| `info` | Query FPB status |
-| `alloc <size>` | Allocate RAM |
-| `upload <addr> <data>` | Upload binary data |
-| `patch <comp> <orig> <target>` | Set FPB patch |
-| `unpatch <comp>` | Clear patch |
-| `ping` | Connection test |
+| Command | Key Arguments | Description |
+|---------|---------------|-------------|
+| `ping` | — | Connection test, responds `PONG` |
+| `info` | — | Query FPB status, slot states, version |
+| `alloc` | `--size N` | Allocate RAM buffer, returns address |
+| `upload` | `--addr OFFSET --data BASE64 [--crc CRC]` | Write binary chunk to last allocation |
+| `read` | `--addr ADDR --len N [--crc CRC] [--force]` | Read device memory, returns Base64 |
+| `write` | `--addr ADDR --data BASE64 [--crc CRC] [--force]` | Write to arbitrary address |
+| `patch` | `--comp N --orig ADDR --target ADDR [--crc CRC]` | Set FPB patch directly (no trampoline) |
+| `tpatch` | `--comp N --orig ADDR --target ADDR [--crc CRC]` | Set patch via Flash trampoline (Cortex-M3/M4) |
+| `dpatch` | `--comp N --orig ADDR --target ADDR [--crc CRC]` | Set patch via DebugMonitor (ARMv8-M) |
+| `unpatch` | `--comp N` / `--all` | Clear one or all patches, frees memory |
+| `enable` | `--comp N --enable 0\|1` / `--all` | Enable or disable patch slot(s) |
+| `echo` | `--data HEX` | Throughput test: echoes length and CRC |
+| `echoback` | `--len N` | Throughput test: sends N bytes back as Base64 |
+| `hello` | — | Call `fl_hello()` to verify injection |
+| `fopen` | `--path PATH [--mode r\|w\|a]` | Open file on device filesystem |
+| `fwrite` | `--data BASE64 [--crc CRC]` | Write to open file |
+| `fread` | `--len N` | Read from open file, returns Base64 |
+| `fclose` | — | Close open file |
+| `fcrc` | `--len N` | CRC-16 of open file |
+| `fseek` | `--addr OFFSET` | Seek open file |
+| `fstat` | `--path PATH` | File metadata |
+| `flist` | `--path PATH` | List directory |
+| `fremove` | `--path PATH` | Delete file |
+| `fmkdir` | `--path PATH` | Create directory |
+| `frename` | `--path SRC --newpath DST` | Rename file |
 
 ### Response Format
 
 ```
-OK <data>
-ERROR <message>
+[FLOK] <message>          # Success (single line)
+[FLERR] <message>         # Failure
+
+[FLOK] ... data=BASE64    # Success with binary payload
+[FLEND]                   # End of multi-line response
 ```
+
+CRC-16 covers `addr(4B) + len(4B) + payload` for upload/read/write commands, and `comp(4B) + orig(4B) + target(4B)` for patch commands.
 
 ## API Reference
 
 ### FPB Functions
 
 ```c
-void fpb_init(void);
-void fpb_set_patch(uint8_t comp, uint32_t orig, uint32_t target);
-void fpb_clear_patch(uint8_t comp);
-fpb_state_t fpb_get_state(void);
+fpb_result_t fpb_init(void);
+void         fpb_deinit(void);
+fpb_result_t fpb_set_patch(uint8_t comp_id, uint32_t original_addr, uint32_t patch_addr);
+fpb_result_t fpb_clear_patch(uint8_t comp_id);
+fpb_result_t fpb_enable_patch(uint8_t comp_id, bool enable);
+const fpb_state_t* fpb_get_state(void);
+fpb_result_t fpb_get_info(fpb_info_t* info);
 ```
 
 ### Trampoline Functions
 
 ```c
-void fbp_trampoline_set_target(uint32_t comp, uint32_t target);
-void fbp_trampoline_clear_target(uint32_t comp);
-uint32_t fbp_trampoline_get_address(uint32_t comp);
+void     fpb_trampoline_set_target(uint32_t comp, uint32_t target);
+void     fpb_trampoline_clear_target(uint32_t comp);
+uint32_t fpb_trampoline_get_address(uint32_t comp);
 ```
 
 ### DebugMonitor Functions
 
 ```c
-void fpb_debugmon_init(void);
-void fpb_debugmon_set_redirect(uint8_t comp, uint32_t orig, uint32_t target);
-void fpb_debugmon_clear_redirect(uint8_t comp);
+int      fpb_debugmon_init(void);
+void     fpb_debugmon_deinit(void);
+int      fpb_debugmon_set_redirect(uint8_t comp_id, uint32_t original_addr, uint32_t redirect_addr);
+int      fpb_debugmon_clear_redirect(uint8_t comp_id);
+uint32_t fpb_debugmon_get_redirect(uint32_t original_addr);
+bool     fpb_debugmon_is_active(void);
+void     fpb_debugmon_handler(uint32_t* stack_frame);
 ```
 
 ## Limitations
