@@ -1762,3 +1762,56 @@ class TestUnreferencedTranslations(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNoTranslationInLogs(unittest.TestCase):
+    """Ensure log.info/warn/error calls do NOT use t() for translation.
+
+    Log messages are developer-facing and should always be in English.
+    Using t() causes log output to appear in the user's UI language,
+    making bug reports and debugging harder.
+    """
+
+    JS_FEATURES_DIR = os.path.join(BASE_DIR, "static", "js", "features")
+    JS_CORE_DIR = os.path.join(BASE_DIR, "static", "js", "core")
+    JS_UI_DIR = os.path.join(BASE_DIR, "static", "js", "ui")
+
+    # Regex: log.info/warn/error/success( ... t( ...
+    # Matches both direct: log.warn(t('key', ...))
+    # and template: log.info(`...${t('key', ...)}...`)
+    LOG_WITH_T_RE = re.compile(
+        r"\blog\.(info|warn|error|success)\s*\([^;]*?\bt\s*\(", re.DOTALL
+    )
+
+    def _scan_dir(self, dirpath):
+        """Scan all .js files in a directory for log calls containing t()."""
+        violations = []
+        if not os.path.isdir(dirpath):
+            return violations
+        for fname in sorted(os.listdir(dirpath)):
+            if not fname.endswith(".js"):
+                continue
+            fpath = os.path.join(dirpath, fname)
+            with open(fpath, "r", encoding="utf-8") as f:
+                content = f.read()
+            for m in self.LOG_WITH_T_RE.finditer(content):
+                # Find line number
+                line_no = content[: m.start()].count("\n") + 1
+                # Extract a short snippet for the error message
+                snippet = content[m.start() : m.start() + 80].replace("\n", " ")
+                violations.append(f"  {fname}:{line_no}  {snippet}...")
+        return violations
+
+    def test_no_t_in_log_calls(self):
+        """log.info/warn/error must not use t() — logs should be English."""
+        all_violations = []
+        for d in [self.JS_FEATURES_DIR, self.JS_CORE_DIR, self.JS_UI_DIR]:
+            all_violations.extend(self._scan_dir(d))
+
+        self.assertEqual(
+            len(all_violations),
+            0,
+            f"\n Found {len(all_violations)} log calls using t() for translation.\n"
+            "Log messages should use plain English strings, not t().\n\n"
+            + "\n".join(all_violations),
+        )

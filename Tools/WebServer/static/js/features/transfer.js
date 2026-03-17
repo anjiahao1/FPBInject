@@ -131,9 +131,7 @@ async function deleteDeviceFile(path) {
     }
     return data;
   } catch (e) {
-    log.error(
-      t('transfer.delete_failed', 'Delete failed: {{error}}', { error: e }),
-    );
+    log.error(`Delete failed: ${e}`);
     return { success: false, error: e.message };
   }
 }
@@ -160,9 +158,7 @@ async function renameDeviceFile(oldPath, newPath) {
     }
     return data;
   } catch (e) {
-    log.error(
-      t('transfer.rename_failed', 'Rename failed: {{error}}', { error: e }),
-    );
+    log.error(`Rename failed: ${e}`);
     return { success: false, error: e.message };
   }
 }
@@ -721,7 +717,7 @@ async function cancelTransfer() {
 
     transferAbortController.abort();
     transferAbortController = null;
-    log.warn(t('transfer.cancelled', 'Transfer cancelled'));
+    log.warn('Transfer cancelled');
     hideTransferProgress();
   }
 }
@@ -936,11 +932,7 @@ async function uploadFolderEntry(dirEntry, remotePath) {
   const targetPath =
     remotePath === '/' ? `/${folderName}` : `${remotePath}/${folderName}`;
 
-  log.info(
-    t('transfer.scanning_folder', 'Scanning folder: {{name}}...', {
-      name: folderName,
-    }),
-  );
+  log.info(`Scanning folder: ${folderName}...`);
 
   // Collect all files first (only collect contents, not the root folder itself)
   const dirReader = dirEntry.createReader();
@@ -953,23 +945,14 @@ async function uploadFolderEntry(dirEntry, remotePath) {
   }
 
   if (files.length === 0) {
-    log.warn(
-      t('transfer.folder_empty', 'Folder is empty: {{name}}', {
-        name: folderName,
-      }),
-    );
+    log.warn(`Folder is empty: ${folderName}`);
     // Still create the empty directory
     await createDeviceDirectory(targetPath);
     refreshDeviceFiles();
     return;
   }
 
-  log.info(
-    t('transfer.found_files', 'Found {{count}} files in {{name}}', {
-      count: files.length,
-      name: folderName,
-    }),
-  );
+  log.info(`Found ${files.length} files in ${folderName}`);
 
   // Upload folder
   await uploadFolderFiles(files, targetPath, folderName);
@@ -1004,7 +987,7 @@ async function uploadFolderFiles(files, targetPath, folderName) {
   for (const { file, relativePath } of files) {
     // Check if cancelled
     if (transferAbortController && transferAbortController.signal.aborted) {
-      log.warn(t('transfer.folder_cancelled', 'Folder upload cancelled'));
+      log.warn('Folder upload cancelled');
       hideTransferProgress();
       return;
     }
@@ -1066,26 +1049,14 @@ async function uploadFolderFiles(files, targetPath, folderName) {
         uploadedBytes += file.size;
         uploadedFiles++;
       } else if (result.cancelled) {
-        log.warn(t('transfer.folder_cancelled', 'Folder upload cancelled'));
+        log.warn('Folder upload cancelled');
         hideTransferProgress();
         return;
       } else {
-        log.error(
-          t(
-            'transfer.upload_file_failed',
-            'Failed to upload {{path}}: {{error}}',
-            { path: relativePath, error: result.error },
-          ),
-        );
+        log.error(`Failed to upload ${relativePath}: ${result.error}`);
       }
     } catch (e) {
-      log.error(
-        t(
-          'transfer.upload_file_error',
-          'Upload error for {{path}}: {{error}}',
-          { path: relativePath, error: e },
-        ),
-      );
+      log.error(`Upload error for ${relativePath}: ${e}`);
     }
   }
 
@@ -1095,16 +1066,7 @@ async function uploadFolderFiles(files, targetPath, folderName) {
   const avgSpeed = elapsed > 0 ? uploadedBytes / elapsed : 0;
 
   log.success(
-    t(
-      'transfer.folder_complete',
-      'Folder upload complete: {{name}} ({{uploaded}}/{{total}} files, {{speed}})',
-      {
-        name: folderName,
-        uploaded: uploadedFiles,
-        total: totalFiles,
-        speed: formatSpeed(avgSpeed),
-      },
-    ),
+    `Folder upload complete: ${folderName} (${uploadedFiles}/${totalFiles} files, ${formatSpeed(avgSpeed)})`,
   );
 
   refreshDeviceFiles();
@@ -1190,12 +1152,7 @@ async function uploadDroppedFile(file) {
     remotePath = `${remotePath}/${file.name}`;
   }
 
-  log.info(
-    t('transfer.starting_upload', 'Starting upload: {{name}} -> {{path}}', {
-      name: file.name,
-      path: remotePath,
-    }),
-  );
+  log.info(`Starting upload: ${file.name} -> ${remotePath}`);
   updateTransferProgress(0, t('transfer.uploading', 'Uploading...'));
   updateTransferControls(true);
 
@@ -1217,37 +1174,21 @@ async function uploadDroppedFile(file) {
     hideTransferProgress();
 
     if (result.cancelled) {
-      log.warn(
-        t('transfer.upload_cancelled', 'Upload cancelled: {{name}}', {
-          name: file.name,
-        }),
-      );
+      log.warn(`Upload cancelled: ${file.name}`);
     } else if (result.success) {
       const speedStr = result.avg_speed
         ? ` (${formatSpeed(result.avg_speed)})`
         : '';
       const statsStr = formatTransferStats(result.stats);
-      log.success(
-        t(
-          'transfer.upload_complete',
-          'Upload complete: {{path}}{{speed}}{{stats}}',
-          { path: remotePath, speed: speedStr, stats: statsStr },
-        ),
-      );
+      log.success(`Upload complete: ${remotePath}${speedStr}${statsStr}`);
       refreshDeviceFiles();
     } else {
-      log.error(
-        t('transfer.upload_failed_log', 'Upload failed: {{error}}', {
-          error: result.error,
-        }),
-      );
+      log.error(`Upload failed: ${result.error}`);
       showTransferErrorAlert('Upload', file.name, result.error, result.stats);
     }
   } catch (e) {
     hideTransferProgress();
-    log.error(
-      t('transfer.upload_error', 'Upload error: {{error}}', { error: e }),
-    );
+    log.error(`Upload error: ${e}`);
     showTransferErrorAlert('Upload', file.name, e.message || String(e));
   }
 }
@@ -1258,7 +1199,7 @@ async function uploadDroppedFile(file) {
 async function uploadToDevice() {
   const state = window.FPBState;
   if (!state.isConnected) {
-    log.error(t('transfer.not_connected', 'Not connected'));
+    log.error('Not connected');
     return;
   }
 
@@ -1283,7 +1224,7 @@ async function uploadToDevice() {
 async function uploadFolderToDevice() {
   const state = window.FPBState;
   if (!state.isConnected) {
-    log.error(t('transfer.not_connected', 'Not connected'));
+    log.error('Not connected');
     return;
   }
 
@@ -1332,7 +1273,7 @@ async function uploadFolderToDevice() {
 async function downloadFromDevice() {
   const state = window.FPBState;
   if (!state.isConnected) {
-    log.error(t('transfer.not_connected', 'Not connected'));
+    log.error('Not connected');
     return;
   }
 
@@ -1352,9 +1293,7 @@ async function downloadFromDevice() {
   const filesToDownload = transferSelectedFiles.filter((f) => f.type !== 'dir');
 
   if (filesToDownload.length === 0) {
-    log.error(
-      t('transfer.select_files_download', 'Please select file(s) to download'),
-    );
+    log.error('Please select file(s) to download');
     return;
   }
 
@@ -1366,9 +1305,7 @@ async function downloadFromDevice() {
     const progressPrefix =
       filesToDownload.length > 1 ? `[${i + 1}/${filesToDownload.length}] ` : '';
 
-    log.info(
-      `${progressPrefix}${t('transfer.starting_download', 'Starting download: {{path}}', { path: remotePath })}`,
-    );
+    log.info(`${progressPrefix}Starting download: ${remotePath}`);
     updateTransferProgress(
       0,
       `${progressPrefix}${t('transfer.downloading', 'Downloading {{name}}...', { name: fileName })}`,
@@ -1390,9 +1327,7 @@ async function downloadFromDevice() {
       );
 
       if (result.cancelled) {
-        log.warn(
-          `${progressPrefix}${t('transfer.download_cancelled', 'Download cancelled: {{name}}', { name: fileName })}`,
-        );
+        log.warn(`${progressPrefix}Download cancelled: ${fileName}`);
         break; // Stop downloading remaining files
       } else if (result.success && result.blob) {
         // Trigger browser download
@@ -1408,12 +1343,10 @@ async function downloadFromDevice() {
           : '';
         const statsStr = formatTransferStats(result.stats);
         log.success(
-          `${progressPrefix}${t('transfer.download_complete', 'Download complete: {{name}}{{speed}}{{stats}}', { name: fileName, speed: speedStr, stats: statsStr })}`,
+          `${progressPrefix}Download complete: ${fileName}${speedStr}${statsStr}`,
         );
       } else {
-        log.error(
-          `${progressPrefix}${t('transfer.download_failed_log', 'Download failed: {{error}}', { error: result.error })}`,
-        );
+        log.error(`${progressPrefix}Download failed: ${result.error}`);
         showTransferErrorAlert(
           'Download',
           fileName,
@@ -1422,9 +1355,7 @@ async function downloadFromDevice() {
         );
       }
     } catch (e) {
-      log.error(
-        `${progressPrefix}${t('transfer.download_error', 'Download error: {{error}}', { error: e })}`,
-      );
+      log.error(`${progressPrefix}Download error: ${e}`);
       showTransferErrorAlert('Download', fileName, e.message || String(e));
     }
   }
@@ -1444,9 +1375,7 @@ async function deleteFromDevice() {
   }
 
   if (transferSelectedFiles.length === 0) {
-    log.error(
-      t('transfer.select_file_delete', 'Please select a file to delete'),
-    );
+    log.error('Please select a file to delete');
     return;
   }
 
@@ -1509,12 +1438,7 @@ async function renameOnDevice() {
   }
 
   if (transferSelectedFiles.length === 0) {
-    log.error(
-      t(
-        'transfer.select_file_rename',
-        'Please select a file or directory to rename',
-      ),
-    );
+    log.error('Please select a file or directory to rename');
     return;
   }
 

@@ -974,7 +974,7 @@ async function writeSymbolToDevice(symName) {
   // Extract current hex data from the hex dump
   const hexDump = contentDiv.querySelector('.sym-hex-dump');
   if (!hexDump) {
-    log.error(t('symbols.no_hex_data', 'No hex data to write'));
+    log.error('No hex data to write');
     return;
   }
 
@@ -987,7 +987,7 @@ async function writeSymbolToDevice(symName) {
     .trim();
 
   if (!hexBytes || !/^[0-9a-fA-F]+$/.test(hexBytes)) {
-    log.error(t('symbols.invalid_hex', 'Invalid hex data'));
+    log.error('Invalid hex data');
     return;
   }
 
@@ -1117,7 +1117,7 @@ async function writeSymbolField(symName, offset, size, newHex) {
 async function readMemoryAddress(addrStr, size) {
   const addr = addrStr.trim();
   if (!addr || !size || size <= 0) {
-    log.error(t('symbols.invalid_params', 'Invalid address or size'));
+    log.error('Invalid address or size');
     return;
   }
 
