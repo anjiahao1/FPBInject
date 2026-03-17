@@ -11,6 +11,7 @@ Provides serial port operations with multi-device support.
 
 import glob
 import logging
+import os
 import threading
 
 import serial
@@ -94,11 +95,19 @@ class ThreadCheckedSerial:
 
 
 def scan_serial_ports():
-    """Scan for available serial ports."""
+    """Scan for available serial ports.
+
+    Returns a list of dicts with keys: device, description, accessible.
+    ``accessible`` is True when the current process has read+write permission.
+    """
     ports = serial.tools.list_ports.comports()
     # Filter out /dev/ttyS* devices (legacy serial ports, usually virtual or unused)
     result = [
-        {"device": port.device, "description": port.description}
+        {
+            "device": port.device,
+            "description": port.description,
+            "accessible": os.access(port.device, os.R_OK | os.W_OK),
+        }
         for port in ports
         if not port.device.startswith("/dev/ttyS")
     ]
@@ -108,9 +117,32 @@ def scan_serial_ports():
     existing_devices = {item["device"] for item in result}
     for dev in ch341_devices:
         if dev not in existing_devices:
-            result.append({"device": dev, "description": "CH341 USB Serial"})
+            result.append(
+                {
+                    "device": dev,
+                    "description": "CH341 USB Serial",
+                    "accessible": os.access(dev, os.R_OK | os.W_OK),
+                }
+            )
 
     return result
+
+
+def _classify_serial_error(e):
+    """Classify a serial exception into an error code.
+
+    Returns:
+        str: One of 'permission_denied', 'device_not_found', 'device_busy',
+             or 'serial_error'.
+    """
+    msg = str(e)
+    if "Permission denied" in msg or "Errno 13" in msg:
+        return "permission_denied"
+    if "No such file" in msg or "Errno 2" in msg or "FileNotFoundError" in msg:
+        return "device_not_found"
+    if "Device or resource busy" in msg or "Errno 16" in msg:
+        return "device_busy"
+    return "serial_error"
 
 
 def serial_open(
@@ -132,6 +164,12 @@ def serial_open(
         parity: Parity, none/even/odd/mark/space (default: none)
         stop_bits: Stop bits, 1/1.5/2 (default: 1)
         flow_control: Flow control, none/rtscts/dsrdtr/xonxoff (default: none)
+
+    Returns:
+        tuple: (ThreadCheckedSerial, None) on success, or
+               (None, error_string) on failure.
+               The error_string is prefixed with a bracketed error code, e.g.
+               ``[permission_denied] Serial error: ...``
     """
     PARITY_MAP = {
         "none": serial.PARITY_NONE,
@@ -167,9 +205,10 @@ def serial_open(
         time.sleep(0.1)
         return ThreadCheckedSerial(ser), None
     except serial.SerialException as e:
-        return None, f"Serial error: {e}"
+        code = _classify_serial_error(e)
+        return None, f"[{code}] Serial error: {e}"
     except Exception as e:
-        return None, f"Error: {e}"
+        return None, f"[unknown_error] Error: {e}"
 
 
 def serial_write(device, command, timeout=2.0):

@@ -269,6 +269,16 @@ window.i18nResources['zh-TW'] = {
       no_inject_cache: '沒有可重新注入的快取',
       confirm_reinject: '確定重新注入 {{count}} 個檔案？',
       reinject_partial: '重新注入：{{success}} 個成功，{{fail}} 個失敗',
+      // 連線診斷
+      diag_permission_denied: '串列埠權限不足',
+      diag_permission_denied_hint:
+        '請執行: sudo usermod -aG dialout $USER\n然後登出並重新登入。',
+      diag_device_not_found: '裝置未找到',
+      diag_device_not_found_hint:
+        '請檢查 USB 線纜是否連接，然後點擊重新整理按鈕。',
+      diag_device_busy: '串列埠被佔用',
+      diag_device_busy_hint:
+        '請關閉其他串列埠工具（minicom、screen、PuTTY 等）後重試。',
     },
 
     // 模態框

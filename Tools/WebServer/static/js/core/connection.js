@@ -59,6 +59,65 @@ function getConnectionMaxRetries() {
 }
 
 /* ===========================
+   CONNECTION DIAGNOSTICS
+   =========================== */
+
+/**
+ * Error codes that should NOT be retried — the problem is deterministic.
+ */
+const NON_RETRYABLE_ERRORS = [
+  'permission_denied',
+  'device_not_found',
+  'device_busy',
+];
+
+/**
+ * Build a user-friendly diagnostic alert message based on error_code.
+ */
+function buildDiagnosticMessage(errorCode, errorMsg) {
+  const diagMap = {
+    permission_denied: {
+      title: t(
+        'messages.diag_permission_denied',
+        'Serial port permission denied',
+      ),
+      hint: t(
+        'messages.diag_permission_denied_hint',
+        'Run: sudo usermod -aG dialout $USER\nThen log out and log back in.',
+      ),
+    },
+    device_not_found: {
+      title: t('messages.diag_device_not_found', 'Device not found'),
+      hint: t(
+        'messages.diag_device_not_found_hint',
+        'Check if the USB cable is connected, then click Refresh.',
+      ),
+    },
+    device_busy: {
+      title: t('messages.diag_device_busy', 'Serial port is busy'),
+      hint: t(
+        'messages.diag_device_busy_hint',
+        'Close other serial tools (minicom, screen, PuTTY, etc.) and retry.',
+      ),
+    },
+    timeout: {
+      title: t('messages.connection_failed', 'Connection failed'),
+      hint: t(
+        'messages.check_port_hint',
+        'Please check if the device is connected and the port is correct.',
+      ),
+    },
+  };
+
+  const diag = diagMap[errorCode];
+  if (diag) {
+    return `${diag.title}\n\n${diag.hint}`;
+  }
+  // Fallback: show raw error
+  return `${t('messages.connection_failed', 'Connection failed')}: ${errorMsg}\n\n${t('messages.check_port_hint', 'Please check if the device is connected and the port is correct.')}`;
+}
+
+/* ===========================
    CONNECTION MANAGEMENT
    =========================== */
 async function refreshPorts() {
@@ -85,8 +144,9 @@ async function refreshPorts() {
       const opt = document.createElement('option');
       const portName =
         typeof p === 'string' ? p : p.port || p.device || String(p);
+      const accessible = typeof p === 'object' ? p.accessible !== false : true;
       opt.value = portName;
-      opt.textContent = portName;
+      opt.textContent = accessible ? portName : `🔒 ${portName}`;
       sel.appendChild(opt);
     });
 
@@ -168,6 +228,7 @@ async function toggleConnect() {
     btn.textContent = t('connection.connecting', 'Connecting...');
 
     let lastError = null;
+    let lastErrorCode = null;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         if (attempt > 0) {
@@ -195,23 +256,22 @@ async function toggleConnect() {
           btn.disabled = false;
           return;
         } else {
-          lastError = new Error(data.message || 'Connection failed');
+          lastError = data.error || 'Connection failed';
+          lastErrorCode = data.error_code || null;
+          // Don't retry deterministic errors
+          if (lastErrorCode && NON_RETRYABLE_ERRORS.includes(lastErrorCode)) {
+            break;
+          }
         }
       } catch (e) {
-        lastError = e;
+        lastError = e.message || String(e);
+        lastErrorCode = null;
       }
     }
 
-    // All retries failed - show alert
-    const errorMsg = lastError ? lastError.message : 'Unknown error';
-    log.error(`Connection failed after ${maxRetries} retries: ${errorMsg}`);
-    alert(
-      `${t('messages.connection_failed', 'Connection failed')}: ${errorMsg}\n\n` +
-        t(
-          'messages.check_port_hint',
-          'Please check if the device is connected and the port is correct.',
-        ),
-    );
+    // All retries failed (or skipped) - show diagnostic alert
+    log.error(`Connection failed: ${lastError}`);
+    alert(buildDiagnosticMessage(lastErrorCode, lastError));
     btn.textContent = t('connection.connect', 'Connect');
     btn.disabled = false;
   } else {
@@ -384,6 +444,7 @@ window.onBaudrateSelectChange = onBaudrateSelectChange;
 window.getBaudrate = getBaudrate;
 window.updateGdbServerStatus = updateGdbServerStatus;
 window.hideGdbServerStatus = hideGdbServerStatus;
+window.buildDiagnosticMessage = buildDiagnosticMessage;
 
 // Fix connect button text after translatePage() overwrites it
 document.addEventListener('i18n:translated', () => {

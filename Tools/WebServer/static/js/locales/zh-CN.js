@@ -269,6 +269,15 @@ window.i18nResources['zh-CN'] = {
       no_inject_cache: '没有可重新注入的缓存',
       confirm_reinject: '确定重新注入 {{count}} 个文件？',
       reinject_partial: '重新注入：{{success}} 个成功，{{fail}} 个失败',
+      // 连接诊断
+      diag_permission_denied: '串口权限不足',
+      diag_permission_denied_hint:
+        '请运行: sudo usermod -aG dialout $USER\n然后注销并重新登录。',
+      diag_device_not_found: '设备未找到',
+      diag_device_not_found_hint: '请检查 USB 线缆是否连接，然后点击刷新按钮。',
+      diag_device_busy: '串口被占用',
+      diag_device_busy_hint:
+        '请关闭其他串口工具（minicom、screen、PuTTY 等）后重试。',
     },
 
     // 模态框

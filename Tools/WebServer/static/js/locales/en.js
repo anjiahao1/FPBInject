@@ -275,6 +275,16 @@ window.i18nResources['en'] = {
       no_inject_cache: 'No injection cache available',
       confirm_reinject: 'Re-inject {{count}} file(s)?',
       reinject_partial: 'Re-injection: {{success}} succeeded, {{fail}} failed',
+      // Connection diagnostics
+      diag_permission_denied: 'Serial port permission denied',
+      diag_permission_denied_hint:
+        'Run: sudo usermod -aG dialout $USER\nThen log out and log back in.',
+      diag_device_not_found: 'Device not found',
+      diag_device_not_found_hint:
+        'Check if the USB cable is connected, then click Refresh.',
+      diag_device_busy: 'Serial port is busy',
+      diag_device_busy_hint:
+        'Close other serial tools (minicom, screen, PuTTY, etc.) and retry.',
     },
 
     // Modals

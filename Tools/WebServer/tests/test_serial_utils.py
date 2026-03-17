@@ -30,11 +30,13 @@ class TestScanSerialPorts(unittest.TestCase):
         mock_comports.return_value = [mock_port]
         mock_glob.return_value = []
 
-        result = serial_utils.scan_serial_ports()
+        with patch("utils.serial.os.access", return_value=True):
+            result = serial_utils.scan_serial_ports()
 
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["device"], "/dev/ttyUSB0")
         self.assertEqual(result[0]["description"], "USB Serial")
+        self.assertTrue(result[0]["accessible"])
 
     @patch("utils.serial.serial.tools.list_ports.comports")
     @patch("utils.serial.glob.glob")
@@ -43,7 +45,8 @@ class TestScanSerialPorts(unittest.TestCase):
         mock_comports.return_value = []
         mock_glob.return_value = ["/dev/ttyCH341USB0", "/dev/ttyCH341USB1"]
 
-        result = serial_utils.scan_serial_ports()
+        with patch("utils.serial.os.access", return_value=True):
+            result = serial_utils.scan_serial_ports()
 
         self.assertEqual(len(result), 2)
         self.assertTrue(all("CH341" in r["description"] for r in result))
@@ -58,7 +61,8 @@ class TestScanSerialPorts(unittest.TestCase):
         mock_comports.return_value = [mock_port]
         mock_glob.return_value = ["/dev/ttyCH341USB0"]  # Same device
 
-        result = serial_utils.scan_serial_ports()
+        with patch("utils.serial.os.access", return_value=True):
+            result = serial_utils.scan_serial_ports()
 
         # Should have only one
         self.assertEqual(len(result), 1)
@@ -102,7 +106,8 @@ class TestScanSerialPorts(unittest.TestCase):
         ]
         mock_glob.return_value = []
 
-        result = serial_utils.scan_serial_ports()
+        with patch("utils.serial.os.access", return_value=True):
+            result = serial_utils.scan_serial_ports()
 
         # Should only have USB and ACM devices, not ttyS*
         self.assertEqual(len(result), 2)
@@ -130,6 +135,46 @@ class TestScanSerialPorts(unittest.TestCase):
         result = serial_utils.scan_serial_ports()
 
         self.assertEqual(result, [])
+
+    @patch("utils.serial.serial.tools.list_ports.comports")
+    @patch("utils.serial.glob.glob")
+    def test_scan_ports_accessible_false(self, mock_glob, mock_comports):
+        """Test that inaccessible ports have accessible=False"""
+        mock_port = Mock()
+        mock_port.device = "/dev/ttyACM0"
+        mock_port.description = "ACM Device"
+        mock_comports.return_value = [mock_port]
+        mock_glob.return_value = []
+
+        with patch("utils.serial.os.access", return_value=False):
+            result = serial_utils.scan_serial_ports()
+
+        self.assertEqual(len(result), 1)
+        self.assertFalse(result[0]["accessible"])
+
+
+class TestClassifySerialError(unittest.TestCase):
+    """_classify_serial_error test"""
+
+    def test_permission_denied(self):
+        e = serial.SerialException("[Errno 13] Permission denied: '/dev/ttyACM0'")
+        self.assertEqual(serial_utils._classify_serial_error(e), "permission_denied")
+
+    def test_device_not_found(self):
+        e = serial.SerialException("[Errno 2] No such file or directory")
+        self.assertEqual(serial_utils._classify_serial_error(e), "device_not_found")
+
+    def test_device_busy(self):
+        e = serial.SerialException("[Errno 16] Device or resource busy")
+        self.assertEqual(serial_utils._classify_serial_error(e), "device_busy")
+
+    def test_generic_serial_error(self):
+        e = serial.SerialException("some other error")
+        self.assertEqual(serial_utils._classify_serial_error(e), "serial_error")
+
+    def test_file_not_found_error_string(self):
+        e = Exception("FileNotFoundError: /dev/ttyACM0")
+        self.assertEqual(serial_utils._classify_serial_error(e), "device_not_found")
 
 
 class TestSerialOpen(unittest.TestCase):
@@ -173,7 +218,7 @@ class TestSerialOpen(unittest.TestCase):
 
     @patch("utils.serial.serial.Serial")
     def test_open_serial_exception(self, mock_serial):
-        """Test serial exception"""
+        """Test serial exception includes error code prefix"""
         import serial
 
         mock_serial.side_effect = serial.SerialException("Port busy")
@@ -181,17 +226,63 @@ class TestSerialOpen(unittest.TestCase):
         ser, error = serial_utils.serial_open("/dev/ttyUSB0")
 
         self.assertIsNone(ser)
-        self.assertIn("Serial error", error)
+        self.assertIn("[serial_error]", error)
+        self.assertIn("Port busy", error)
+
+    @patch("utils.serial.serial.Serial")
+    def test_open_permission_denied(self, mock_serial):
+        """Test permission denied error code"""
+        import serial
+
+        mock_serial.side_effect = serial.SerialException(
+            "[Errno 13] could not open port /dev/ttyACM0: "
+            "[Errno 13] Permission denied: '/dev/ttyACM0'"
+        )
+
+        ser, error = serial_utils.serial_open("/dev/ttyACM0")
+
+        self.assertIsNone(ser)
+        self.assertIn("[permission_denied]", error)
+
+    @patch("utils.serial.serial.Serial")
+    def test_open_device_not_found(self, mock_serial):
+        """Test device not found error code"""
+        import serial
+
+        mock_serial.side_effect = serial.SerialException(
+            "[Errno 2] could not open port /dev/ttyACM0: "
+            "[Errno 2] No such file or directory: '/dev/ttyACM0'"
+        )
+
+        ser, error = serial_utils.serial_open("/dev/ttyACM0")
+
+        self.assertIsNone(ser)
+        self.assertIn("[device_not_found]", error)
+
+    @patch("utils.serial.serial.Serial")
+    def test_open_device_busy(self, mock_serial):
+        """Test device busy error code"""
+        import serial
+
+        mock_serial.side_effect = serial.SerialException(
+            "[Errno 16] Device or resource busy: '/dev/ttyACM0'"
+        )
+
+        ser, error = serial_utils.serial_open("/dev/ttyACM0")
+
+        self.assertIsNone(ser)
+        self.assertIn("[device_busy]", error)
 
     @patch("utils.serial.serial.Serial")
     def test_open_generic_exception(self, mock_serial):
-        """Test generic exception"""
+        """Test generic exception includes error code prefix"""
         mock_serial.side_effect = Exception("Unknown error")
 
         ser, error = serial_utils.serial_open("/dev/ttyUSB0")
 
         self.assertIsNone(ser)
-        self.assertIn("Error", error)
+        self.assertIn("[unknown_error]", error)
+        self.assertIn("Unknown error", error)
 
     @patch("utils.serial.serial.Serial")
     def test_open_with_custom_serial_params(self, mock_serial):

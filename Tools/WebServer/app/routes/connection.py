@@ -123,10 +123,20 @@ def api_connect():
             device.flow_control = flow_control
 
     if not run_in_device_worker(device, do_connect, timeout=5.0):
-        return jsonify({"success": False, "error": "Connect timeout"})
+        return jsonify(
+            {"success": False, "error": "Connect timeout", "error_code": "timeout"}
+        )
 
     if result["error"]:
-        return jsonify({"success": False, "error": result["error"]})
+        # Parse error_code from bracketed prefix, e.g. "[permission_denied] ..."
+        error_msg = result["error"]
+        error_code = "unknown_error"
+        if error_msg.startswith("["):
+            end = error_msg.find("]")
+            if end > 0:
+                error_code = error_msg[1:end]
+                error_msg = error_msg[end + 2 :]  # strip "[code] " prefix
+        return jsonify({"success": False, "error": error_msg, "error_code": error_code})
 
     device.auto_connect = True
     state.save_config()
