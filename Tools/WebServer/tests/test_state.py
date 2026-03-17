@@ -259,3 +259,96 @@ class TestPersistentKeys(unittest.TestCase):
         device2 = DeviceState()
         device2.from_dict(data)
         self.assertEqual(device2.ghidra_path, "/home/user/ghidra_11.2.1_PUBLIC")
+
+
+class TestToolLogHandler(unittest.TestCase):
+    """ToolLogHandler tests"""
+
+    def test_emit_info(self):
+        """Test emit with INFO level"""
+        from core.state import ToolLogHandler
+        import logging
+
+        device = DeviceState()
+        handler = ToolLogHandler(device, prefix="test")
+        handler.setFormatter(logging.Formatter("%(message)s"))
+
+        record = logging.LogRecord(
+            name="test", level=logging.INFO, pathname="", lineno=0,
+            msg="hello", args=(), exc_info=None,
+        )
+        handler.emit(record)
+
+        self.assertEqual(len(device.tool_log), 1)
+        self.assertIn("[INFO]", device.tool_log[0]["message"])
+        self.assertIn("test:", device.tool_log[0]["message"])
+
+    def test_emit_warning(self):
+        """Test emit with WARNING level"""
+        from core.state import ToolLogHandler
+        import logging
+
+        device = DeviceState()
+        handler = ToolLogHandler(device)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+
+        record = logging.LogRecord(
+            name="test", level=logging.WARNING, pathname="", lineno=0,
+            msg="warn msg", args=(), exc_info=None,
+        )
+        handler.emit(record)
+
+        self.assertIn("[WARN]", device.tool_log[0]["message"])
+
+    def test_emit_no_prefix(self):
+        """Test emit without prefix"""
+        from core.state import ToolLogHandler
+        import logging
+
+        device = DeviceState()
+        handler = ToolLogHandler(device)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+
+        record = logging.LogRecord(
+            name="test", level=logging.ERROR, pathname="", lineno=0,
+            msg="err", args=(), exc_info=None,
+        )
+        handler.emit(record)
+
+        self.assertIn("[ERROR]", device.tool_log[0]["message"])
+        self.assertNotIn(":", device.tool_log[0]["message"].split("]")[1].split("err")[0].strip())
+
+
+class TestToolLogFunction(unittest.TestCase):
+    """tool_log and _get_caller_name tests"""
+
+    def test_tool_log_formats_message(self):
+        """Test tool_log formats with caller name"""
+        from core.state import tool_log
+
+        device = DeviceState()
+        tool_log(device, "INFO", "test message")
+
+        self.assertEqual(len(device.tool_log), 1)
+        msg = device.tool_log[0]["message"]
+        self.assertIn("[INFO]", msg)
+        self.assertIn("test message", msg)
+        # Should contain the caller function name
+        self.assertIn("test_tool_log_formats_message", msg)
+
+    def test_get_caller_name(self):
+        """Test _get_caller_name returns correct function name"""
+        from core.state import _get_caller_name
+
+        name = _get_caller_name(depth=1)
+        self.assertEqual(name, "test_get_caller_name")
+
+    def test_get_caller_name_deep(self):
+        """Test _get_caller_name with deeper depth"""
+        from core.state import _get_caller_name
+
+        def inner():
+            return _get_caller_name(depth=2)
+
+        name = inner()
+        self.assertEqual(name, "test_get_caller_name_deep")
