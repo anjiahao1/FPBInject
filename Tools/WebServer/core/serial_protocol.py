@@ -373,6 +373,11 @@ class FPBProtocol:
 
             if result.get("ok"):
                 raw = result.get("raw", "")
+
+                # If response has no FLOK marker, device didn't actually respond
+                if "[FLOK]" not in raw:
+                    return None, "Device not responding"
+
                 info = {"ok": True, "slots": [], "fpb_version": 1}  # Default to v1
                 for line in raw.split("\n"):
                     line = line.strip()

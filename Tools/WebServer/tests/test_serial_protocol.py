@@ -623,5 +623,52 @@ class TestEnablePatch(unittest.TestCase):
         self.protocol.send_cmd.assert_called_once_with("-c enable --comp 0 --enable 1")
 
 
+class TestFPBProtocolInfo(unittest.TestCase):
+    """Test info() method."""
+
+    def setUp(self):
+        self.device = MagicMock()
+        self.device.ser = MagicMock()
+        self.device.raw_serial_log = []
+        self.device.raw_log_next_id = 0
+        self.device.raw_log_max_size = 5000
+        self.device.serial_echo_enabled = False
+        self.protocol = FPBProtocol(self.device)
+
+    def test_info_returns_none_when_no_flok_marker(self):
+        """info() returns (None, error) when response has no [FLOK] marker."""
+        # Simulate: send_cmd returns garbage, parse_response returns ok=True
+        # but raw has no [FLOK]
+        self.protocol.send_cmd = MagicMock(return_value="some garbage response")
+        self.protocol.parse_response = MagicMock(
+            return_value={"ok": True, "msg": "", "raw": "some garbage response"}
+        )
+        info, error = self.protocol.info()
+        self.assertIsNone(info)
+        self.assertEqual(error, "Device not responding")
+
+    def test_info_success_with_flok_marker(self):
+        """info() returns valid dict when response has [FLOK] marker."""
+        raw = "[FLOK]\nBuild: Jan 01 2025\nFPB: v1, 6 code + 2 lit = 8 total"
+        self.protocol.send_cmd = MagicMock(return_value=raw)
+        self.protocol.parse_response = MagicMock(
+            return_value={"ok": True, "msg": "", "raw": raw}
+        )
+        info, error = self.protocol.info()
+        self.assertIsNotNone(info)
+        self.assertEqual(error, "")
+        self.assertEqual(info["build_time"], "Jan 01 2025")
+
+    def test_info_returns_none_on_parse_failure(self):
+        """info() returns (None, error) when parse_response returns ok=False."""
+        self.protocol.send_cmd = MagicMock(return_value="[FLERR] timeout")
+        self.protocol.parse_response = MagicMock(
+            return_value={"ok": False, "msg": "timeout", "raw": "[FLERR] timeout"}
+        )
+        info, error = self.protocol.info()
+        self.assertIsNone(info)
+        self.assertEqual(error, "timeout")
+
+
 if __name__ == "__main__":
     unittest.main()

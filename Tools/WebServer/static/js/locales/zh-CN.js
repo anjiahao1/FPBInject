@@ -278,6 +278,8 @@ window.i18nResources['zh-CN'] = {
       diag_device_busy: '串口被占用',
       diag_device_busy_hint:
         '请关闭其他串口工具（minicom、screen、PuTTY 等）后重试。',
+      diag_device_no_response_hint:
+        '请检查是否连接了正确的设备，以及波特率是否与固件匹配。',
     },
 
     // 模态框

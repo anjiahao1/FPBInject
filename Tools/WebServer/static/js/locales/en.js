@@ -285,6 +285,8 @@ window.i18nResources['en'] = {
       diag_device_busy: 'Serial port is busy',
       diag_device_busy_hint:
         'Close other serial tools (minicom, screen, PuTTY, etc.) and retry.',
+      diag_device_no_response_hint:
+        'Check if the correct device is connected and the baud rate matches the firmware.',
     },
 
     // Modals

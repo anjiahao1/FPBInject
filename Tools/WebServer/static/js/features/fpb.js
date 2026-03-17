@@ -271,16 +271,25 @@ async function fpbInfo(showPopup = false) {
         alert(infoLines.join('\n'));
       }
     } else {
-      log.error(data.error || 'Failed to get device info');
+      const errorMsg =
+        data.error || t('messages.unknown_error', 'Unknown error');
+      log.error(errorMsg);
+
+      // Build diagnostic hint based on error content
+      let hint = '';
+      if (errorMsg.toLowerCase().includes('not responding')) {
+        hint = `\n\n${t('messages.diag_device_no_response_hint', 'Check if the correct device is connected and the baud rate matches the firmware.')}`;
+      }
+
       alert(
-        `❌ ${t('messages.device_info_failed', 'Failed to Get Device Info')}\n\n` +
-          `${data.error || t('messages.unknown_error', 'Unknown error')}`,
+        `${t('messages.device_info_failed', 'Failed to Get Device Info')}\n\n` +
+          `${errorMsg}${hint}`,
       );
     }
   } catch (e) {
     log.error(`Info failed: ${e}`);
     alert(
-      `❌ ${t('messages.device_info_failed', 'Failed to Get Device Info')}\n\n` +
+      `${t('messages.device_info_failed', 'Failed to Get Device Info')}\n\n` +
         `${t('messages.error', 'Error')}: ${e}`,
     );
   }

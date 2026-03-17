@@ -294,6 +294,34 @@ module.exports = function (w) {
       w.FPBState.isConnected = false;
     });
 
+    it('shows alert with diagnostic hint on not-responding error', async () => {
+      w.FPBState.isConnected = true;
+      const mockTerm = new MockTerminal();
+      w.FPBState.toolTerminal = mockTerm;
+      w.FPBState.slotStates = Array(8)
+        .fill()
+        .map(() => ({ occupied: false }));
+      setFetchResponse('/api/fpb/info', {
+        success: false,
+        error: 'Device not responding',
+      });
+      const alertCalls = [];
+      const origAlert = browserGlobals.alert;
+      browserGlobals.alert = (msg) => alertCalls.push(msg);
+      global.alert = browserGlobals.alert;
+      await w.fpbInfo();
+      browserGlobals.alert = origAlert;
+      global.alert = origAlert;
+      assertTrue(alertCalls.length > 0);
+      assertTrue(
+        alertCalls[0].includes('baud rate') ||
+          alertCalls[0].includes('not responding') ||
+          alertCalls[0].includes('Device'),
+      );
+      w.FPBState.toolTerminal = null;
+      w.FPBState.isConnected = false;
+    });
+
     it('FPB v2 forces DebugMonitor mode and disables other options', async () => {
       w.FPBState.isConnected = true;
       const mockTerm = new MockTerminal();

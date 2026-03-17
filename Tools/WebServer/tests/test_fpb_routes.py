@@ -180,6 +180,24 @@ class TestFPBInfoRoute(TestFPBRoutesBase):
         self.assertIn("not responding", data["error"])
 
     @patch("app.routes.fpb._get_helpers")
+    def test_info_no_device_info_available(self, mock_helpers):
+        """Test info when device returns empty response (no FLOK marker)"""
+        mock_fpb = Mock()
+        # Simulate: info() returns None when device doesn't respond with FLOK
+        mock_fpb.info.return_value = (None, "Device not responding")
+        mock_fpb.exit_fl_mode = Mock()
+        mock_helpers.return_value = make_mock_helpers(mock_fpb)
+
+        # Ensure no cached device_info
+        state.device.device_info = None
+
+        response = self.client.get("/api/fpb/info")
+        data = json.loads(response.data)
+
+        self.assertFalse(data["success"])
+        self.assertIn("not responding", data["error"])
+
+    @patch("app.routes.fpb._get_helpers")
     def test_info_build_time_mismatch(self, mock_helpers):
         """Test info with build time mismatch"""
         mock_fpb = Mock()

@@ -279,6 +279,8 @@ window.i18nResources['zh-TW'] = {
       diag_device_busy: '串列埠被佔用',
       diag_device_busy_hint:
         '請關閉其他串列埠工具（minicom、screen、PuTTY 等）後重試。',
+      diag_device_no_response_hint:
+        '請檢查是否連接了正確的裝置，以及鮑率是否與韌體相符。',
     },
 
     // 模態框
