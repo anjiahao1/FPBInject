@@ -7,7 +7,6 @@ pyserial
 pygdbmi
 watchdog
 tree_sitter
-mcp
 
 # Test dependencies
 coverage

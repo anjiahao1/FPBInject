@@ -28,7 +28,14 @@ if str(_SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(_SERVER_DIR))
 os.chdir(_SERVER_DIR)
 
-from mcp.server.fastmcp import FastMCP  # noqa: E402
+try:
+    from mcp.server.fastmcp import FastMCP  # noqa: E402
+except ImportError:
+    print(
+        "Error: 'mcp' package is not installed.\n" "Install it with: pip install mcp",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 # Import the CLI class directly
 from cli.fpb_cli import FPBCLI  # noqa: E402
