@@ -400,6 +400,9 @@ window.i18nResources['zh-CN'] = {
       slot_original: '劫持地址',
       slot_target: '跳转地址',
       slot_code_size: '代码大小',
+      slot_status: '状态',
+      slot_on: '开启',
+      slot_off: '关闭',
       // 终端
       pause: '暂停',
       resume: '继续',

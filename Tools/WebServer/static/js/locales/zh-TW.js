@@ -401,6 +401,9 @@ window.i18nResources['zh-TW'] = {
       slot_original: '劫持地址',
       slot_target: '跳轉地址',
       slot_code_size: '程式碼大小',
+      slot_status: '狀態',
+      slot_on: '開啟',
+      slot_off: '關閉',
       // 終端
       pause: '暫停',
       resume: '繼續',

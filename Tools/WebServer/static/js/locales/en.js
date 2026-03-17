@@ -407,6 +407,9 @@ window.i18nResources['en'] = {
       slot_original: 'Original',
       slot_target: 'Target',
       slot_code_size: 'Code size',
+      slot_status: 'Status',
+      slot_on: 'ON',
+      slot_off: 'OFF',
       // Terminal
       pause: 'Pause',
       resume: 'Resume',
