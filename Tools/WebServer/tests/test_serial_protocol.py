@@ -281,8 +281,8 @@ class TestReadMemory(unittest.TestCase):
         def mock_send(cmd, timeout=0.5):
             import re
 
-            m_addr = re.search(r"--addr 0x([0-9A-Fa-f]+)", cmd)
-            m_len = re.search(r"--len (\d+)", cmd)
+            m_addr = re.search(r"-a 0x([0-9A-Fa-f]+)", cmd)
+            m_len = re.search(r"-l (\d+)", cmd)
             chunk_addr = int(m_addr.group(1), 16)
             n = int(m_len.group(1))
             chunk = b"\xbb" * n
@@ -417,7 +417,7 @@ class TestEnhancedCRC(unittest.TestCase):
         self.protocol.write_memory(addr, data)
 
         cmd_str = self.protocol.send_cmd.call_args[0][0]
-        m = re.search(r"--crc 0x([0-9A-Fa-f]+)", cmd_str)
+        m = re.search(r"-r 0x([0-9A-Fa-f]+)", cmd_str)
         sent_crc = int(m.group(1), 16)
 
         expected = crc16_update(0xFFFF, struct.pack("<II", addr, len(data)))
@@ -466,7 +466,7 @@ class TestEnhancedCRC(unittest.TestCase):
         self.assertIsNone(self.protocol._parse_read_response(resp_old, addr=addr))
 
     def test_read_cmd_includes_crc(self):
-        """read_memory must send --crc covering addr + len."""
+        """read_memory must send -r covering addr + len."""
         import re
         import struct
         import base64
@@ -486,15 +486,15 @@ class TestEnhancedCRC(unittest.TestCase):
         self.protocol.read_memory(addr, length)
 
         cmd_str = self.protocol.send_cmd.call_args[0][0]
-        m = re.search(r"--crc 0x([0-9A-Fa-f]+)", cmd_str)
-        self.assertIsNotNone(m, "read command must include --crc")
+        m = re.search(r"-r 0x([0-9A-Fa-f]+)", cmd_str)
+        self.assertIsNotNone(m, "read command must include -r")
         sent_crc = int(m.group(1), 16)
 
         expected = crc16_update(0xFFFF, struct.pack("<II", addr, length))
         self.assertEqual(sent_crc, expected)
 
     def test_patch_cmd_includes_crc(self):
-        """patch must send --crc covering comp + orig + target."""
+        """patch must send -r covering comp + orig + target."""
         import re
         import struct
         from utils.crc import crc16_update
@@ -505,15 +505,15 @@ class TestEnhancedCRC(unittest.TestCase):
         self.protocol.patch(comp, orig, target)
 
         cmd_str = self.protocol.send_cmd.call_args[0][0]
-        m = re.search(r"--crc 0x([0-9A-Fa-f]+)", cmd_str)
-        self.assertIsNotNone(m, "patch command must include --crc")
+        m = re.search(r"-r 0x([0-9A-Fa-f]+)", cmd_str)
+        self.assertIsNotNone(m, "patch command must include -r")
         sent_crc = int(m.group(1), 16)
 
         expected = crc16_update(0xFFFF, struct.pack("<III", comp, orig, target))
         self.assertEqual(sent_crc, expected)
 
     def test_tpatch_cmd_includes_crc(self):
-        """tpatch must send --crc covering comp + orig + target."""
+        """tpatch must send -r covering comp + orig + target."""
         import re
         import struct
         from utils.crc import crc16_update
@@ -524,15 +524,15 @@ class TestEnhancedCRC(unittest.TestCase):
         self.protocol.tpatch(comp, orig, target)
 
         cmd_str = self.protocol.send_cmd.call_args[0][0]
-        m = re.search(r"--crc 0x([0-9A-Fa-f]+)", cmd_str)
-        self.assertIsNotNone(m, "tpatch command must include --crc")
+        m = re.search(r"-r 0x([0-9A-Fa-f]+)", cmd_str)
+        self.assertIsNotNone(m, "tpatch command must include -r")
         sent_crc = int(m.group(1), 16)
 
         expected = crc16_update(0xFFFF, struct.pack("<III", comp, orig, target))
         self.assertEqual(sent_crc, expected)
 
     def test_dpatch_cmd_includes_crc(self):
-        """dpatch must send --crc covering comp + orig + target."""
+        """dpatch must send -r covering comp + orig + target."""
         import re
         import struct
         from utils.crc import crc16_update
@@ -543,8 +543,8 @@ class TestEnhancedCRC(unittest.TestCase):
         self.protocol.dpatch(comp, orig, target)
 
         cmd_str = self.protocol.send_cmd.call_args[0][0]
-        m = re.search(r"--crc 0x([0-9A-Fa-f]+)", cmd_str)
-        self.assertIsNotNone(m, "dpatch command must include --crc")
+        m = re.search(r"-r 0x([0-9A-Fa-f]+)", cmd_str)
+        self.assertIsNotNone(m, "dpatch command must include -r")
         sent_crc = int(m.group(1), 16)
 
         expected = crc16_update(0xFFFF, struct.pack("<III", comp, orig, target))

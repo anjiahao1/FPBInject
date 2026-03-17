@@ -29,7 +29,7 @@ class TestFileTransferWithSpaces(unittest.TestCase):
         success, msg = self.ft.fopen("/path/my file.txt", "r")
         self.assertTrue(success)
         self.mock_fpb.send_fl_cmd.assert_called_with(
-            'fl -c fopen --path "/path/my file.txt" --mode r',
+            'fl -c fopen --path "/path/my file.txt" -m r',
             timeout=2.0,
             max_retries=3,
         )
@@ -173,7 +173,7 @@ class TestFileTransferSingleCharPath(unittest.TestCase):
         success, msg = self.ft.fopen("/", "r")
         self.assertTrue(success)
         self.mock_fpb.send_fl_cmd.assert_called_with(
-            "fl -c fopen --path / --mode r",
+            "fl -c fopen --path / -m r",
             timeout=2.0,
             max_retries=3,
         )
@@ -183,7 +183,7 @@ class TestFileTransferSingleCharPath(unittest.TestCase):
         success, msg = self.ft.fopen("/a", "r")
         self.assertTrue(success)
         self.mock_fpb.send_fl_cmd.assert_called_with(
-            "fl -c fopen --path /a --mode r",
+            "fl -c fopen --path /a -m r",
             timeout=2.0,
             max_retries=3,
         )

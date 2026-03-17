@@ -599,7 +599,7 @@ class FPBProtocol:
             chunk_addr = addr + offset
             # CRC covers: addr(4B LE) + len(4B LE) for request verification
             crc_val = crc16_update(0xFFFF, struct.pack("<II", chunk_addr, n))
-            cmd = f"-c read --addr 0x{chunk_addr:X} --len {n} --crc 0x{crc_val:04X}"
+            cmd = f"-c read -a 0x{chunk_addr:X} -l {n} -r 0x{crc_val:04X}"
             last_error = ""
 
             for attempt in range(max_retries + 1):
@@ -646,7 +646,7 @@ class FPBProtocol:
             # CRC covers: addr(4B LE) + len(4B LE) + data payload
             crc_val = crc16_update(0xFFFF, struct.pack("<II", chunk_addr, len(chunk)))
             crc_val = crc16_update(crc_val, chunk)
-            cmd = f"-c write --addr 0x{chunk_addr:X} --data {b64} --crc 0x{crc_val:04X}"
+            cmd = f"-c write -a 0x{chunk_addr:X} -d {b64} -r 0x{crc_val:04X}"
             last_error = ""
 
             for attempt in range(max_retries + 1):
@@ -682,7 +682,7 @@ class FPBProtocol:
         """Set FPB patch (direct mode)."""
         try:
             crc_val = self._patch_crc(comp, orig, target)
-            cmd = f"-c patch --comp {comp} --orig 0x{orig:X} --target 0x{target:X} --crc 0x{crc_val:04X}"
+            cmd = f"-c patch --comp {comp} --orig 0x{orig:X} --target 0x{target:X} -r 0x{crc_val:04X}"
             resp = self.send_cmd(cmd)
             result = self.parse_response(resp)
             return result.get("ok", False), result.get("msg", "")
@@ -693,7 +693,7 @@ class FPBProtocol:
         """Set trampoline patch."""
         try:
             crc_val = self._patch_crc(comp, orig, target)
-            cmd = f"-c tpatch --comp {comp} --orig 0x{orig:X} --target 0x{target:X} --crc 0x{crc_val:04X}"
+            cmd = f"-c tpatch --comp {comp} --orig 0x{orig:X} --target 0x{target:X} -r 0x{crc_val:04X}"
             resp = self.send_cmd(cmd)
             result = self.parse_response(resp)
             return result.get("ok", False), result.get("msg", "")
@@ -704,7 +704,7 @@ class FPBProtocol:
         """Set DebugMonitor patch."""
         try:
             crc_val = self._patch_crc(comp, orig, target)
-            cmd = f"-c dpatch --comp {comp} --orig 0x{orig:X} --target 0x{target:X} --crc 0x{crc_val:04X}"
+            cmd = f"-c dpatch --comp {comp} --orig 0x{orig:X} --target 0x{target:X} -r 0x{crc_val:04X}"
             resp = self.send_cmd(cmd)
             result = self.parse_response(resp)
             return result.get("ok", False), result.get("msg", "")
@@ -861,13 +861,13 @@ class FPBProtocol:
         direction (device → PC) throughput.
 
         Protocol:
-          Request:  fl -c echoback --len {N}
+          Request:  fl -c echoback -l {N}
           Response: [FLOK] ECHOBACK {N} bytes crc=0x{CRC} data={base64}
 
         Returns a test_result dict with keys: size, passed, error,
         response_time_ms.
         """
-        cmd = f"-c echoback --len {test_size}"
+        cmd = f"-c echoback -l {test_size}"
 
         test_result: Dict = {
             "size": test_size,

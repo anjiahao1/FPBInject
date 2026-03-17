@@ -132,7 +132,7 @@ class FileTransfer:
             Tuple of (success, message)
         """
         path = _sanitize_path(path)
-        cmd = f"fl -c fopen --path {_format_path_arg(path)} --mode {mode}"
+        cmd = f"fl -c fopen --path {_format_path_arg(path)} -m {mode}"
         return self._send_cmd(cmd)
 
     def fwrite(
@@ -154,7 +154,7 @@ class FileTransfer:
 
         b64_data = base64.b64encode(data).decode("ascii")
         crc = crc16(data)
-        cmd = f"fl -c fwrite --data {b64_data} --crc {crc}"
+        cmd = f"fl -c fwrite -d {b64_data} -r {crc}"
         self.stats["total_chunks"] += 1
         data_len = len(data)
 
@@ -214,7 +214,7 @@ class FileTransfer:
         if max_retries is None:
             max_retries = self.max_retries
 
-        cmd = f"fl -c fread --len {size}"
+        cmd = f"fl -c fread -l {size}"
         self.stats["total_chunks"] += 1
 
         for attempt in range(max_retries + 1):
@@ -325,7 +325,7 @@ class FileTransfer:
         Returns:
             Tuple of (success, size, crc)
         """
-        cmd = f"fl -c fcrc --len {size}" if size > 0 else "fl -c fcrc"
+        cmd = f"fl -c fcrc -l {size}" if size > 0 else "fl -c fcrc"
         success, response = self._send_cmd(cmd)
 
         if not success:

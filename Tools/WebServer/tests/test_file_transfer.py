@@ -113,7 +113,7 @@ class TestFileTransferBasicOps(unittest.TestCase):
         success, msg = self.ft.fopen("/test.txt", "r")
         self.assertTrue(success)
         call_args = self.mock_fpb.send_fl_cmd.call_args[0][0]
-        self.assertIn("--mode r", call_args)
+        self.assertIn("-m r", call_args)
 
     def test_fopen_append_mode(self):
         """Test file open in append mode."""
@@ -121,7 +121,7 @@ class TestFileTransferBasicOps(unittest.TestCase):
         success, msg = self.ft.fopen("/test.txt", "a")
         self.assertTrue(success)
         call_args = self.mock_fpb.send_fl_cmd.call_args[0][0]
-        self.assertIn("--mode a", call_args)
+        self.assertIn("-m a", call_args)
 
     def test_fwrite_success(self):
         """Test successful file write."""
@@ -130,8 +130,8 @@ class TestFileTransferBasicOps(unittest.TestCase):
         success, msg = self.ft.fwrite(data)
         self.assertTrue(success)
         call_args = self.mock_fpb.send_fl_cmd.call_args[0][0]
-        self.assertIn("--data", call_args)
-        self.assertIn("--crc", call_args)
+        self.assertIn("-d", call_args)
+        self.assertIn("-r", call_args)
 
     def test_fwrite_empty_data(self):
         """Test write with empty data."""
@@ -439,7 +439,7 @@ class TestFileTransferCRC(unittest.TestCase):
         self.assertEqual(size, 512)
         self.assertEqual(crc_val, 0x1234)
         call_args = self.mock_fpb.send_fl_cmd.call_args[0][0]
-        self.assertIn("--len 512", call_args)
+        self.assertIn("-l 512", call_args)
 
     def test_fcrc_failure(self):
         """Test fcrc failure."""
@@ -1029,7 +1029,7 @@ class TestFileTransferRetry(unittest.TestCase):
         )
         self.ft.fread()  # No size argument
         call_args = self.mock_fpb.send_fl_cmd.call_args[0][0]
-        self.assertIn("--len 256", call_args)  # download_chunk_size is 256
+        self.assertIn("-l 256", call_args)  # download_chunk_size is 256
 
     def test_fwrite_custom_max_retries(self):
         """Test fwrite with custom max_retries."""
