@@ -195,15 +195,15 @@ class TestServerProxyNoServer(unittest.TestCase):
     """Test behavior when no server is running."""
 
     def test_is_server_running_false(self):
-        proxy = ServerProxy(base_url="http://127.0.0.1:19999")
+        proxy = ServerProxy(base_url="http://127.0.0.1:19876")
         self.assertFalse(proxy.is_server_running())
 
     def test_is_device_connected_false(self):
-        proxy = ServerProxy(base_url="http://127.0.0.1:19999")
+        proxy = ServerProxy(base_url="http://127.0.0.1:19876")
         self.assertFalse(proxy.is_device_connected())
 
     def test_info_raises(self):
-        proxy = ServerProxy(base_url="http://127.0.0.1:19999")
+        proxy = ServerProxy(base_url="http://127.0.0.1:19876")
         with self.assertRaises(URLError):
             proxy.info()
 
@@ -239,3 +239,144 @@ class TestServerProxyWithToken(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestServerProxyLaunchServer(unittest.TestCase):
+    """Test launch_server and ensure_server logic."""
+
+    def test_launch_server_main_not_found(self):
+        """launch_server returns False when main.py doesn't exist."""
+        from unittest.mock import patch
+
+        proxy = ServerProxy(base_url="http://127.0.0.1:19876")
+        with patch("os.path.exists", return_value=False):
+            self.assertFalse(proxy.launch_server())
+
+    def test_launch_server_popen_fails(self):
+        """launch_server returns False when Popen raises."""
+        from unittest.mock import patch
+
+        proxy = ServerProxy(base_url="http://127.0.0.1:19876")
+        with patch("os.path.exists", return_value=True), patch(
+            "subprocess.Popen", side_effect=OSError("fail")
+        ):
+            self.assertFalse(proxy.launch_server())
+
+    def test_launch_server_process_dies(self):
+        """launch_server returns False when subprocess exits immediately."""
+        from unittest.mock import patch, MagicMock
+
+        proxy = ServerProxy(base_url="http://127.0.0.1:19876")
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 1  # Process exited with code 1
+        mock_proc.returncode = 1
+
+        with patch("os.path.exists", return_value=True), patch(
+            "subprocess.Popen", return_value=mock_proc
+        ):
+            self.assertFalse(proxy.launch_server())
+        self.assertIsNone(proxy._server_process)
+
+    def test_launch_server_timeout(self):
+        """launch_server returns False when server doesn't respond in time."""
+        from unittest.mock import patch, MagicMock
+        import cli.server_proxy as sp_mod
+
+        proxy = ServerProxy(base_url="http://127.0.0.1:19876")
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None  # Process still running
+
+        orig_timeout = sp_mod._LAUNCH_TIMEOUT
+        sp_mod._LAUNCH_TIMEOUT = 0.1  # Very short timeout
+        sp_mod._LAUNCH_POLL_INTERVAL = 0.05
+        try:
+            with patch("os.path.exists", return_value=True), patch(
+                "subprocess.Popen", return_value=mock_proc
+            ):
+                self.assertFalse(proxy.launch_server())
+            mock_proc.terminate.assert_called_once()
+        finally:
+            sp_mod._LAUNCH_TIMEOUT = orig_timeout
+            sp_mod._LAUNCH_POLL_INTERVAL = 0.3
+
+    def test_launch_server_success(self):
+        """launch_server returns True when server becomes reachable."""
+        from unittest.mock import patch, MagicMock
+
+        proxy = ServerProxy(base_url="http://127.0.0.1:19876")
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None
+
+        call_count = [0]
+
+        def fake_is_running():
+            call_count[0] += 1
+            return call_count[0] >= 2  # Succeed on second poll
+
+        with patch("os.path.exists", return_value=True), patch(
+            "subprocess.Popen", return_value=mock_proc
+        ), patch.object(proxy, "is_server_running", side_effect=fake_is_running):
+            self.assertTrue(proxy.launch_server())
+
+    def test_ensure_server_already_running(self):
+        """ensure_server returns True immediately if server is running."""
+        from unittest.mock import patch
+
+        proxy = ServerProxy(base_url="http://127.0.0.1:19876")
+        with patch.object(proxy, "is_server_running", return_value=True):
+            self.assertTrue(proxy.ensure_server())
+
+    def test_ensure_server_launches(self):
+        """ensure_server calls launch_server when not running."""
+        from unittest.mock import patch
+
+        proxy = ServerProxy(base_url="http://127.0.0.1:19876")
+        with patch.object(proxy, "is_server_running", return_value=False), patch.object(
+            proxy, "launch_server", return_value=True
+        ) as mock_launch:
+            self.assertTrue(proxy.ensure_server())
+            mock_launch.assert_called_once()
+
+
+class TestServerProxySerialAndConnection(unittest.TestCase):
+    """Test serial_send, serial_read, connect, disconnect proxy methods."""
+
+    @classmethod
+    def setUpClass(cls):
+        _MockHTTPHandler.responses = {
+            "/api/status": {"success": True, "connected": True},
+            "/api/connect": {"success": True, "port": "/dev/ttyACM0"},
+            "/api/disconnect": {"success": True},
+            "/api/serial/send": {"success": True, "sent": "hello"},
+            "/api/logs": {"raw_data": "line1\nline2\n", "raw_next": 100},
+        }
+        cls.server = http.server.HTTPServer(("127.0.0.1", 0), _MockHTTPHandler)
+        cls.port = cls.server.server_address[1]
+        cls.base_url = f"http://127.0.0.1:{cls.port}"
+        cls.thread = threading.Thread(target=cls.server.serve_forever)
+        cls.thread.daemon = True
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.shutdown()
+
+    def _proxy(self):
+        return ServerProxy(base_url=self.base_url)
+
+    def test_connect(self):
+        result = self._proxy().connect("/dev/ttyACM0")
+        self.assertTrue(result["success"])
+
+    def test_disconnect(self):
+        result = self._proxy().disconnect()
+        self.assertTrue(result["success"])
+
+    def test_serial_send(self):
+        result = self._proxy().serial_send("hello")
+        self.assertTrue(result["success"])
+
+    def test_serial_read(self):
+        result = self._proxy().serial_read(raw_since=0)
+        self.assertIn("raw_data", result)
+        self.assertEqual(result["raw_data"], "line1\nline2\n")

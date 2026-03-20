@@ -76,7 +76,15 @@ class DeviceState(DeviceStateBase):
 
 
 class FPBCLI:
-    """Lightweight CLI wrapper for FPBInject"""
+    """Lightweight CLI wrapper for FPBInject.
+
+    By default operates in pure-proxy mode: all device operations are
+    forwarded to the WebServer via HTTP API.  If the WebServer is not
+    running it is auto-launched as a background subprocess.
+
+    Pass ``direct=True`` to bypass the proxy and open the serial port
+    directly (legacy / escape-hatch mode).
+    """
 
     def __init__(
         self,
@@ -93,7 +101,7 @@ class FPBCLI:
     ):
         self.verbose = verbose
         self.setup_logging()
-        # Create device state
+        # Create device state (used for offline ELF operations & direct mode)
         self._device_state = DeviceState()
         self._device_state.elf_path = elf_path
         self._device_state.compile_commands_path = compile_commands
@@ -106,32 +114,60 @@ class FPBCLI:
         self._proxy = None
         self._port_lock = None
 
-        # Connect to serial if port specified
+        if direct and port:
+            # --direct: bypass proxy, open serial directly
+            self._direct_connect(port, baudrate)
+            return
+
         if port:
-            if not direct:
-                # Try proxy mode first
-                proxy = ServerProxy(base_url=server_url)
-                if proxy.is_server_running() and proxy.is_device_connected():
-                    self._proxy = proxy
-                    self._device_state.connected = True
-                    if self.verbose:
-                        logging.info(f"Using WebServer proxy mode ({server_url})")
-                    return
+            # Default: pure-proxy mode
+            proxy = ServerProxy(base_url=server_url)
 
-            # Direct mode: acquire port lock then connect
-            lock = PortLock(port)
-            if not lock.acquire():
-                owner = lock.get_owner_pid()
-                raise FPBCLIError(
-                    f"Serial port {port} is locked by another process "
-                    f"(PID: {owner}). "
-                    f"Stop the other process or use a different port."
-                )
-            self._port_lock = lock
+            # 1) If server already running, use it
+            if proxy.is_server_running():
+                self._proxy = proxy
+                self._device_state.connected = proxy.is_device_connected()
+                # If server is up but device not connected, connect via proxy
+                if not self._device_state.connected:
+                    result = proxy.connect(port, baudrate)
+                    self._device_state.connected = result.get("success", False)
+                if self.verbose:
+                    logging.info(f"Using WebServer proxy mode ({server_url})")
+                return
 
-            self._device_state.connect(port, baudrate)
+            # 2) Server not running — auto-launch it
             if self.verbose:
-                logging.info(f"Connected to {port}")
+                logging.info("WebServer not running, auto-launching...")
+            if proxy.launch_server():
+                self._proxy = proxy
+                # Server just started, connect device via proxy
+                result = proxy.connect(port, baudrate)
+                self._device_state.connected = result.get("success", False)
+                if self.verbose:
+                    logging.info(
+                        f"WebServer launched, proxy mode active ({server_url})"
+                    )
+                return
+
+            # 3) Auto-launch failed — fall back to direct mode
+            if self.verbose:
+                logging.warning("Auto-launch failed, falling back to direct mode")
+            self._direct_connect(port, baudrate)
+
+    def _direct_connect(self, port: str, baudrate: int):
+        """Open serial port directly (legacy / escape-hatch mode)."""
+        lock = PortLock(port)
+        if not lock.acquire():
+            owner = lock.get_owner_pid()
+            raise FPBCLIError(
+                f"Serial port {port} is locked by another process "
+                f"(PID: {owner}). "
+                f"Stop the other process or use a different port."
+            )
+        self._port_lock = lock
+        self._device_state.connect(port, baudrate)
+        if self.verbose:
+            logging.info(f"Connected to {port} (direct mode)")
 
     def setup_logging(self):
         """Setup logging based on verbosity"""
@@ -152,6 +188,20 @@ class FPBCLI:
         if error and self.verbose:
             error_data["exception"] = str(error)
         self.output_json(error_data)
+
+    def _require_device(self) -> None:
+        """Raise if no device connection (proxy or direct) is available."""
+        if not self._proxy and not self._device_state.connected:
+            raise FPBCLIError("No device connected. Use --port to specify serial port.")
+
+    @staticmethod
+    def _write_local(local_path: str, data: bytes) -> None:
+        """Write binary data to a local file, creating directories as needed."""
+        local_dir = os.path.dirname(local_path)
+        if local_dir:
+            os.makedirs(local_dir, exist_ok=True)
+        with open(local_path, "wb") as f:
+            f.write(data)
 
     def analyze(self, elf_path: str, func_name: str) -> None:
         """Analyze function in ELF file"""
@@ -382,13 +432,11 @@ class FPBCLI:
                 self.output_json(result)
                 return
 
-            # Check if device is connected
+            # Offline: no device — compile-only validation
             if not self._device_state.connected:
-                # Still provide useful info even without connection
                 with open(source_file, "r", encoding="utf-8") as f:
                     source_content = f.read()
 
-                # Try to compile to verify the patch is valid
                 elf = elf_path or getattr(self._device_state, "elf_path", None)
                 if not elf:
                     raise FPBCLIError(
@@ -397,7 +445,6 @@ class FPBCLI:
                         "Or connect to device first using the WebServer interface."
                     )
 
-                # Compile to validate
                 binary_data, symbols, error = self._fpb.compile_inject(
                     source_content=source_content,
                     base_addr=0x20001000,
@@ -427,11 +474,10 @@ class FPBCLI:
                 )
                 return
 
-            # Device is connected - perform actual injection
+            # Direct mode: device connected locally
             with open(source_file, "r", encoding="utf-8") as f:
                 source_content = f.read()
 
-            # Set ELF path if provided
             if elf_path:
                 self._device_state.elf_path = elf_path
             if compile_commands:
@@ -450,7 +496,7 @@ class FPBCLI:
                 {
                     "success": success,
                     "result": result,
-                    "verify_status": None,  # TODO: implement verify
+                    "verify_status": None,
                 }
             )
 
@@ -465,13 +511,8 @@ class FPBCLI:
                 self.output_json(result)
                 return
 
-            if not self._device_state.connected:
-                raise FPBCLIError(
-                    "No device connected. Use --port to specify serial port."
-                )
-
+            self._require_device()
             success, msg = self._fpb.unpatch(comp=comp, all=all_patches)
-
             self.output_json(
                 {
                     "success": success,
@@ -479,7 +520,6 @@ class FPBCLI:
                     "comp": comp if not all_patches else "all",
                 }
             )
-
         except Exception as e:
             self.output_error(f"Unpatch failed: {str(e)}", e)
 
@@ -491,20 +531,16 @@ class FPBCLI:
                 self.output_json(result)
                 return
 
-            if not self._device_state.connected:
-                raise FPBCLIError(
-                    "No device connected. Use --port to specify serial port."
-                )
-
+            self._require_device()
             info, error = self._fpb.info()
             if error:
                 raise FPBCLIError(f"Failed to get info: {error}")
 
+            result = {"success": True, "info": info}
+
             # Check build time mismatch
-            build_time_mismatch = False
             device_build_time = info.get("build_time") if info else None
             elf_build_time = None
-
             if self._device_state.elf_path and os.path.exists(
                 self._device_state.elf_path
             ):
@@ -512,53 +548,39 @@ class FPBCLI:
                     self._device_state.elf_path
                 )
 
-            if device_build_time and elf_build_time:
-                if device_build_time.strip() != elf_build_time.strip():
-                    build_time_mismatch = True
-
-            result = {"success": True, "info": info}
-
             if device_build_time or elf_build_time:
+                build_time_mismatch = bool(
+                    device_build_time
+                    and elf_build_time
+                    and device_build_time.strip() != elf_build_time.strip()
+                )
                 result["device_build_time"] = device_build_time
                 result["elf_build_time"] = elf_build_time
                 result["build_time_mismatch"] = build_time_mismatch
-
-            if build_time_mismatch:
-                logging.warning(
-                    f"Build time mismatch! Device: '{device_build_time}', "
-                    f"ELF: '{elf_build_time}'"
-                )
+                if build_time_mismatch:
+                    logging.warning(
+                        f"Build time mismatch! Device: '{device_build_time}', ELF: '{elf_build_time}'"
+                    )
 
             self.output_json(result)
-
         except Exception as e:
             self.output_error(f"Info failed: {str(e)}", e)
 
     def test_serial(
         self, start_size: int = 16, max_size: int = 4096, timeout: float = 2.0
     ) -> None:
-        """
-        Test serial throughput to find max single-transfer size.
-
-        Uses x2 stepping to probe device's receive buffer limit.
-        """
+        """Test serial throughput to find max single-transfer size."""
         try:
             if self._proxy:
-                result = self._proxy.test_serial(start_size, max_size, timeout)
-                self.output_json(result)
+                self.output_json(self._proxy.test_serial(start_size, max_size, timeout))
                 return
 
-            if not self._device_state.connected:
-                raise FPBCLIError(
-                    "No device connected. Use --port to specify serial port."
+            self._require_device()
+            self.output_json(
+                self._fpb.test_serial_throughput(
+                    start_size=start_size, max_size=max_size, timeout=timeout
                 )
-
-            result = self._fpb.test_serial_throughput(
-                start_size=start_size, max_size=max_size, timeout=timeout
             )
-
-            self.output_json(result)
-
         except Exception as e:
             self.output_error(f"Serial test failed: {str(e)}", e)
 
@@ -566,12 +588,10 @@ class FPBCLI:
         """List directory contents on device"""
         try:
             if self._proxy:
-                result = self._proxy.file_list(path)
-                self.output_json(result)
+                self.output_json(self._proxy.file_list(path))
                 return
 
-            if not self._device_state.connected:
-                raise FPBCLIError("No device connected.")
+            self._require_device()
             from core.file_transfer import FileTransfer
 
             ft = FileTransfer(
@@ -590,12 +610,10 @@ class FPBCLI:
         """Get file/directory stat on device"""
         try:
             if self._proxy:
-                result = self._proxy.file_stat(path)
-                self.output_json(result)
+                self.output_json(self._proxy.file_stat(path))
                 return
 
-            if not self._device_state.connected:
-                raise FPBCLIError("No device connected.")
+            self._require_device()
             from core.file_transfer import FileTransfer
 
             ft = FileTransfer(
@@ -619,11 +637,7 @@ class FPBCLI:
                     import base64
 
                     data = base64.b64decode(result["data"])
-                    local_dir = os.path.dirname(local_path)
-                    if local_dir:
-                        os.makedirs(local_dir, exist_ok=True)
-                    with open(local_path, "wb") as f:
-                        f.write(data)
+                    self._write_local(local_path, data)
                     self.output_json(
                         {
                             "success": True,
@@ -637,8 +651,7 @@ class FPBCLI:
                     self.output_json(result)
                 return
 
-            if not self._device_state.connected:
-                raise FPBCLIError("No device connected.")
+            self._require_device()
             from core.file_transfer import FileTransfer
 
             ft = FileTransfer(
@@ -650,15 +663,7 @@ class FPBCLI:
             success, data, msg = ft.download(remote_path)
             if not success:
                 raise FPBCLIError(f"Download failed: {msg}")
-
-            # Ensure local directory exists
-            local_dir = os.path.dirname(local_path)
-            if local_dir:
-                os.makedirs(local_dir, exist_ok=True)
-
-            with open(local_path, "wb") as f:
-                f.write(data)
-
+            self._write_local(local_path, data)
             self.output_json(
                 {
                     "success": True,
@@ -675,15 +680,10 @@ class FPBCLI:
         """Read memory from device"""
         try:
             if self._proxy:
-                result = self._proxy.mem_read(addr, length, fmt)
-                self.output_json(result)
+                self.output_json(self._proxy.mem_read(addr, length, fmt))
                 return
 
-            if not self._device_state.connected:
-                raise FPBCLIError(
-                    "No device connected. Use --port to specify serial port."
-                )
-
+            self._require_device()
             self._fpb.enter_fl_mode()
             try:
                 data, msg = self._fpb.read_memory(addr, length)
@@ -699,9 +699,7 @@ class FPBCLI:
                 "length": length,
                 "actual_length": len(data),
             }
-
             if fmt == "hex":
-                # Classic hex dump with ASCII
                 lines = []
                 for i in range(0, len(data), 16):
                     chunk = data[i : i + 16]
@@ -714,14 +712,11 @@ class FPBCLI:
             elif fmt == "raw":
                 result["data"] = data.hex()
             elif fmt == "u32":
-                words = []
-                for i in range(0, len(data) - 3, 4):
-                    val = int.from_bytes(data[i : i + 4], "little")
-                    words.append(f"0x{val:08X}")
-                result["words"] = words
-
+                result["words"] = [
+                    f"0x{int.from_bytes(data[i:i+4], 'little'):08X}"
+                    for i in range(0, len(data) - 3, 4)
+                ]
             self.output_json(result)
-
         except Exception as e:
             self.output_error(f"Memory read failed: {str(e)}", e)
 
@@ -729,15 +724,10 @@ class FPBCLI:
         """Write memory to device"""
         try:
             if self._proxy:
-                result = self._proxy.mem_write(addr, data_hex)
-                self.output_json(result)
+                self.output_json(self._proxy.mem_write(addr, data_hex))
                 return
 
-            if not self._device_state.connected:
-                raise FPBCLIError(
-                    "No device connected. Use --port to specify serial port."
-                )
-
+            self._require_device()
             try:
                 data = bytes.fromhex(data_hex)
             except ValueError:
@@ -753,7 +743,6 @@ class FPBCLI:
 
             if not success:
                 raise FPBCLIError(f"Memory write failed: {error}")
-
             self.output_json(
                 {
                     "success": True,
@@ -762,7 +751,6 @@ class FPBCLI:
                     "message": f"Wrote {len(data)} bytes to 0x{addr:08X}",
                 }
             )
-
         except Exception as e:
             self.output_error(f"Memory write failed: {str(e)}", e)
 
@@ -773,11 +761,7 @@ class FPBCLI:
                 result = self._proxy.mem_read(addr, length, fmt="raw")
                 if result.get("success") and result.get("data"):
                     data = bytes.fromhex(result["data"])
-                    out_dir = os.path.dirname(output_file)
-                    if out_dir:
-                        os.makedirs(out_dir, exist_ok=True)
-                    with open(output_file, "wb") as f:
-                        f.write(data)
+                    self._write_local(output_file, data)
                     self.output_json(
                         {
                             "success": True,
@@ -791,11 +775,7 @@ class FPBCLI:
                     self.output_json(result)
                 return
 
-            if not self._device_state.connected:
-                raise FPBCLIError(
-                    "No device connected. Use --port to specify serial port."
-                )
-
+            self._require_device()
             self._fpb.enter_fl_mode()
             try:
                 data, msg = self._fpb.read_memory(addr, length)
@@ -804,14 +784,7 @@ class FPBCLI:
 
             if data is None:
                 raise FPBCLIError(f"Memory read failed: {msg}")
-
-            out_dir = os.path.dirname(output_file)
-            if out_dir:
-                os.makedirs(out_dir, exist_ok=True)
-
-            with open(output_file, "wb") as f:
-                f.write(data)
-
+            self._write_local(output_file, data)
             self.output_json(
                 {
                     "success": True,
@@ -821,9 +794,132 @@ class FPBCLI:
                     "message": f"Dumped {len(data)} bytes to {output_file}",
                 }
             )
-
         except Exception as e:
             self.output_error(f"Memory dump failed: {str(e)}", e)
+
+    def serial_send(
+        self, data: str, read_response: bool = True, timeout: float = 1.0
+    ) -> None:
+        """Send data to device serial port."""
+        try:
+            if self._proxy:
+                result = self._proxy.serial_send(data)
+                if result.get("success") and read_response:
+                    import time as _time
+
+                    _time.sleep(timeout)
+                    log_resp = self._proxy.serial_read(raw_since=0)
+                    result["response"] = log_resp.get("raw_data", "").strip()
+                self.output_json(result)
+                return
+
+            self._require_device()
+            ser = self._device_state.ser
+            ser.write((data + "\n").encode())
+            ser.flush()
+
+            response = ""
+            if read_response:
+                import time as _time
+
+                start = _time.time()
+                while _time.time() - start < timeout:
+                    if ser.in_waiting:
+                        response += ser.read(ser.in_waiting).decode(
+                            "utf-8", errors="replace"
+                        )
+                        _time.sleep(0.05)
+                    else:
+                        if response:
+                            break
+                        _time.sleep(0.1)
+
+            self.output_json(
+                {"success": True, "sent": data, "response": response.strip()}
+            )
+        except Exception as e:
+            self.output_error(f"Serial send failed: {str(e)}", e)
+
+    def serial_read(self, timeout: float = 1.0, lines: int = 50) -> None:
+        """Read recent serial output from device."""
+        try:
+            if self._proxy:
+                log_resp = self._proxy.serial_read(raw_since=0)
+                raw = log_resp.get("raw_data", "")
+                log_lines = [ln for ln in raw.split("\n") if ln.strip()][-lines:]
+                self.output_json(
+                    {
+                        "success": True,
+                        "log": log_lines,
+                        "log_count": len(log_lines),
+                        "raw_data": raw,
+                    }
+                )
+                return
+
+            self._require_device()
+            import time as _time
+
+            ser = self._device_state.ser
+            new_data = ""
+            start = _time.time()
+            while _time.time() - start < timeout:
+                if ser.in_waiting:
+                    new_data += ser.read(ser.in_waiting).decode(
+                        "utf-8", errors="replace"
+                    )
+                    _time.sleep(0.05)
+                else:
+                    if new_data:
+                        break
+                    _time.sleep(0.1)
+
+            log_lines = [ln for ln in new_data.split("\n") if ln.strip()][-lines:]
+            self.output_json(
+                {
+                    "success": True,
+                    "new_data": new_data,
+                    "log": log_lines,
+                    "log_count": len(log_lines),
+                }
+            )
+        except Exception as e:
+            self.output_error(f"Serial read failed: {str(e)}", e)
+
+    def connect(self, port: str, baudrate: int = 115200) -> None:
+        """Connect to device (via proxy or direct)."""
+        try:
+            if self._proxy:
+                result = self._proxy.connect(port, baudrate)
+                self._device_state.connected = result.get("success", False)
+                self.output_json(result)
+                return
+
+            if self._device_state.connected:
+                self.output_json({"success": True, "message": "Already connected"})
+                return
+
+            self._direct_connect(port, baudrate)
+            self.output_json({"success": True, "port": port})
+        except Exception as e:
+            self.output_error(f"Connect failed: {str(e)}", e)
+
+    def disconnect(self) -> None:
+        """Disconnect from device."""
+        try:
+            if self._proxy:
+                result = self._proxy.disconnect()
+                self._device_state.connected = False
+                self.output_json(result)
+                return
+
+            self._device_state.disconnect()
+            if self._port_lock:
+                self._port_lock.release()
+                self._port_lock = None
+            self.output_json({"success": True})
+        except Exception as e:
+            self.output_error(f"Disconnect failed: {str(e)}", e)
 
     def cleanup(self):
         """Cleanup resources"""
@@ -1058,6 +1154,46 @@ Examples:
     )
     memdump_parser.add_argument("output", help="Output binary file path")
 
+    # serial-send command (requires device)
+    serial_send_parser = subparsers.add_parser(
+        "serial-send", help="Send data to device serial port (requires --port)"
+    )
+    serial_send_parser.add_argument("data", help="String to send to device")
+    serial_send_parser.add_argument(
+        "--no-read",
+        action="store_true",
+        help="Don't read response after sending",
+    )
+    serial_send_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=1.0,
+        help="Response read timeout in seconds (default: 1.0)",
+    )
+
+    # serial-read command (requires device)
+    serial_read_parser = subparsers.add_parser(
+        "serial-read", help="Read recent serial output (requires --port)"
+    )
+    serial_read_parser.add_argument(
+        "--timeout",
+        type=float,
+        default=1.0,
+        help="How long to wait for data in seconds (default: 1.0)",
+    )
+    serial_read_parser.add_argument(
+        "--lines",
+        type=int,
+        default=50,
+        help="Max number of log lines to return (default: 50)",
+    )
+
+    # connect command
+    subparsers.add_parser("connect", help="Connect to device (requires --port)")
+
+    # disconnect command
+    subparsers.add_parser("disconnect", help="Disconnect from device")
+
     args = parser.parse_args()
 
     if not args.command:
@@ -1120,6 +1256,14 @@ Examples:
             cli.mem_write(args.addr, args.data)
         elif args.command == "mem-dump":
             cli.mem_dump(args.addr, args.length, args.output)
+        elif args.command == "serial-send":
+            cli.serial_send(args.data, not args.no_read, args.timeout)
+        elif args.command == "serial-read":
+            cli.serial_read(args.timeout, args.lines)
+        elif args.command == "connect":
+            cli.connect(args.port, args.baudrate)
+        elif args.command == "disconnect":
+            cli.disconnect()
     except FPBCLIError as e:
         cli.output_error(str(e))
         sys.exit(1)

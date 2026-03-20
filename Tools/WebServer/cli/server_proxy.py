@@ -8,11 +8,17 @@ WebServer proxy for CLI coexistence.
 
 When the WebServer is running, CLI device operations are forwarded
 via HTTP API instead of opening a second serial connection.
+
+If the WebServer is not running, the proxy can auto-launch it as a
+background subprocess so the CLI always operates in proxy mode.
 """
 
 import json
 import logging
 import os
+import subprocess
+import sys
+import time
 from typing import Any, Dict, Optional
 from urllib.request import Request, urlopen
 
@@ -25,6 +31,10 @@ DEFAULT_SERVER_URL = "http://127.0.0.1:5500"
 _PROBE_TIMEOUT = 2
 _API_TIMEOUT = 30
 
+# Auto-launch settings
+_LAUNCH_TIMEOUT = 10  # Max seconds to wait for server startup
+_LAUNCH_POLL_INTERVAL = 0.3  # Poll interval during startup wait
+
 
 class ServerProxy:
     """Proxy device operations through the running WebServer HTTP API."""
@@ -36,6 +46,7 @@ class ServerProxy:
     ):
         self.base_url = base_url.rstrip("/")
         self.token = token
+        self._server_process = None  # Tracks auto-launched subprocess
 
     # ------------------------------------------------------------------
     # Low-level HTTP helpers (stdlib only, no requests dependency)
@@ -67,7 +78,7 @@ class ServerProxy:
             return json.loads(resp.read().decode())
 
     # ------------------------------------------------------------------
-    # Server detection
+    # Server detection & auto-launch
     # ------------------------------------------------------------------
 
     def is_server_running(self) -> bool:
@@ -90,6 +101,128 @@ class ServerProxy:
         """Get full WebServer status."""
         return self._get("/api/status")
 
+    def ensure_server(self) -> bool:
+        """Ensure the WebServer is running, auto-launching if needed.
+
+        Returns True if server is reachable after this call.
+        """
+        if self.is_server_running():
+            return True
+
+        return self.launch_server()
+
+    def launch_server(self) -> bool:
+        """Launch WebServer as a background subprocess.
+
+        Starts main.py with --no-browser --no-auth flags and waits
+        until the server responds to /api/status.
+
+        Returns True if server started successfully.
+        """
+        # Determine main.py path relative to this file
+        webserver_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        main_py = os.path.join(webserver_dir, "main.py")
+
+        if not os.path.exists(main_py):
+            logger.error(f"WebServer main.py not found: {main_py}")
+            return False
+
+        # Parse port from base_url
+        try:
+            from urllib.parse import urlparse
+
+            parsed = urlparse(self.base_url)
+            port = parsed.port or 5500
+        except Exception:
+            port = 5500
+
+        cmd = [
+            sys.executable,
+            main_py,
+            "--no-browser",
+            "--no-auth",
+            "--port",
+            str(port),
+        ]
+
+        logger.info(f"Auto-launching WebServer: {' '.join(cmd)}")
+
+        try:
+            self._server_process = subprocess.Popen(
+                cmd,
+                cwd=webserver_dir,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception as e:
+            logger.error(f"Failed to launch WebServer: {e}")
+            return False
+
+        # Wait for server to become reachable
+        deadline = time.time() + _LAUNCH_TIMEOUT
+        while time.time() < deadline:
+            # Check if process died
+            if self._server_process.poll() is not None:
+                logger.error(
+                    f"WebServer process exited with code {self._server_process.returncode}"
+                )
+                self._server_process = None
+                return False
+
+            if self.is_server_running():
+                logger.info("WebServer is ready")
+                return True
+
+            time.sleep(_LAUNCH_POLL_INTERVAL)
+
+        logger.error(f"WebServer did not start within {_LAUNCH_TIMEOUT}s")
+        # Kill the hung process
+        try:
+            self._server_process.terminate()
+        except Exception:
+            pass
+        self._server_process = None
+        return False
+
+    # ------------------------------------------------------------------
+    # Connection management (proxied to WebServer)
+    # ------------------------------------------------------------------
+
+    def connect(
+        self,
+        port: str,
+        baudrate: int = 115200,
+        timeout: int = 2,
+    ) -> dict:
+        """Connect to device via WebServer."""
+        return self._post(
+            "/api/connect",
+            {"port": port, "baudrate": baudrate, "timeout": timeout},
+        )
+
+    def disconnect(self) -> dict:
+        """Disconnect device via WebServer."""
+        return self._post("/api/disconnect")
+
+    # ------------------------------------------------------------------
+    # Serial terminal (proxied to WebServer logs routes)
+    # ------------------------------------------------------------------
+
+    def serial_send(self, data: str) -> dict:
+        """Send raw data to device serial port via WebServer.
+
+        Uses the /api/serial/send endpoint (same as the web terminal).
+        """
+        return self._post("/api/serial/send", {"data": data})
+
+    def serial_read(self, raw_since: int = 0) -> dict:
+        """Read raw serial output via WebServer.
+
+        Uses the /api/logs endpoint to fetch raw_serial_log entries.
+        Returns dict with 'raw_data' and 'raw_next' for incremental reads.
+        """
+        return self._get(f"/api/logs?raw_since={raw_since}&tool_since=999999999")
+
     # ------------------------------------------------------------------
     # Device operations (proxied to WebServer)
     # ------------------------------------------------------------------
@@ -108,7 +241,6 @@ class ServerProxy:
         comp: int = -1,
     ) -> dict:
         """Inject a patch via WebServer."""
-        # Read source content to send
         source_content = ""
         source_ext = ".c"
         if os.path.exists(source_file):
@@ -167,11 +299,7 @@ class ServerProxy:
         return self._get(f"/api/transfer/stat?path={path}")
 
     def file_download(self, remote_path: str) -> dict:
-        """Download file via WebServer.
-
-        Uses the simple /api/transfer/download-sync endpoint which returns
-        JSON with base64-encoded data (no SSE streaming).
-        """
+        """Download file via WebServer (JSON with base64 data, no SSE)."""
         return self._post(
             "/api/transfer/download-sync",
             {"remote_path": remote_path},

@@ -417,6 +417,7 @@ class TestSerialReadTool(unittest.TestCase):
         from fpb_mcp_server import serial_read
 
         mock_instance = MagicMock()
+        mock_instance._proxy = None
         mock_instance._device_state.ser = None
         mock_instance._device_state.connected = False
         mock_cli_cls.return_value = mock_instance
@@ -429,6 +430,7 @@ class TestSerialReadTool(unittest.TestCase):
         from fpb_mcp_server import serial_read
 
         mock_instance = MagicMock()
+        mock_instance._proxy = None
         mock_ser = MagicMock()
         mock_instance._device_state.ser = mock_ser
         mock_instance._device_state.connected = True
@@ -451,6 +453,7 @@ class TestSerialReadTool(unittest.TestCase):
         from fpb_mcp_server import serial_read, _append_serial_log
 
         mock_instance = MagicMock()
+        mock_instance._proxy = None
         mock_ser = MagicMock()
         mock_instance._device_state.ser = mock_ser
         mock_instance._device_state.connected = True
@@ -485,6 +488,7 @@ class TestSerialSendTool(unittest.TestCase):
         from fpb_mcp_server import serial_send
 
         mock_instance = MagicMock()
+        mock_instance._proxy = None
         mock_instance._device_state.ser = None
         mock_instance._device_state.connected = False
         mock_cli_cls.return_value = mock_instance
@@ -497,6 +501,7 @@ class TestSerialSendTool(unittest.TestCase):
         from fpb_mcp_server import serial_send
 
         mock_instance = MagicMock()
+        mock_instance._proxy = None
         mock_ser = MagicMock()
         mock_instance._device_state.ser = mock_ser
         mock_instance._device_state.connected = True
@@ -521,6 +526,7 @@ class TestSerialSendTool(unittest.TestCase):
         from fpb_mcp_server import serial_send
 
         mock_instance = MagicMock()
+        mock_instance._proxy = None
         mock_ser = MagicMock()
         mock_instance._device_state.ser = mock_ser
         mock_instance._device_state.connected = True
@@ -536,6 +542,7 @@ class TestSerialSendTool(unittest.TestCase):
         from fpb_mcp_server import serial_send
 
         mock_instance = MagicMock()
+        mock_instance._proxy = None
         mock_ser = MagicMock()
         mock_ser.write.side_effect = OSError("Port closed")
         mock_instance._device_state.ser = mock_ser

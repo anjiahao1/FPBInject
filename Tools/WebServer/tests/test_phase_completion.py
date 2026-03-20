@@ -400,6 +400,47 @@ class TestWebServerPortLock(unittest.TestCase):
 
         self.assertTrue("PortLock" in dir(main) or hasattr(main, "PortLock"))
 
+    def test_port_lock_context_manager(self):
+        """PortLock works as context manager."""
+        from utils.port_lock import PortLock
+
+        with PortLock("/dev/test-ctx-mgr") as lock:
+            self.assertIsNotNone(lock)
+        # After exit, lock should be released
+
+    def test_port_lock_context_manager_conflict(self):
+        """PortLock context manager raises on conflict."""
+        from utils.port_lock import PortLock, PortLockError
+
+        lock1 = PortLock("/dev/test-ctx-conflict")
+        self.assertTrue(lock1.acquire())
+        try:
+            with self.assertRaises(PortLockError):
+                with PortLock("/dev/test-ctx-conflict"):
+                    pass
+        finally:
+            lock1.release()
+
+    def test_port_lock_is_locked(self):
+        """is_locked returns correct state."""
+        from utils.port_lock import PortLock
+
+        lock = PortLock("/dev/test-is-locked")
+        self.assertFalse(lock.is_locked())
+        self.assertTrue(lock.acquire())
+        # Another PortLock instance should see it as locked
+        lock2 = PortLock("/dev/test-is-locked")
+        self.assertTrue(lock2.is_locked())
+        lock.release()
+        self.assertFalse(lock2.is_locked())
+
+    def test_port_lock_get_owner_pid_no_file(self):
+        """get_owner_pid returns 'unknown' when no lock file."""
+        from utils.port_lock import PortLock
+
+        lock = PortLock("/dev/test-no-owner-file")
+        self.assertEqual(lock.get_owner_pid(), "unknown")
+
 
 # ============================================================
 # Phase 5: MCP Server proxy-aware reconnect

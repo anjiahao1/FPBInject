@@ -77,6 +77,14 @@ class TestFPBCLIProxyMode(unittest.TestCase):
             "/api/fpb/unpatch": {"success": True, "message": "unpatched"},
             "/api/fpb/mem-read": {"success": True, "hex_dump": "00 01 02"},
             "/api/fpb/mem-write": {"success": True, "message": "written"},
+            "/api/connect": {"success": True, "port": "/dev/ttyACM0"},
+            "/api/disconnect": {"success": True},
+            "/api/serial/send": {"success": True, "sent": "test"},
+            "/api/logs": {"raw_data": "output line\n", "raw_next": 1},
+            "/api/fpb/test-serial": {
+                "success": True,
+                "recommended_upload_chunk_size": 128,
+            },
         }
         cls.server = http.server.HTTPServer(("127.0.0.1", 0), _MockHandler)
         cls.port = cls.server.server_address[1]
@@ -161,6 +169,58 @@ class TestFPBCLIProxyMode(unittest.TestCase):
         self.assertTrue(result["success"])
         cli.cleanup()
 
+    def test_proxy_connect(self):
+        """connect() works through proxy."""
+        cli = self._make_cli()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli.connect("/dev/ttyACM0")
+        result = json.loads(buf.getvalue())
+        self.assertTrue(result["success"])
+        cli.cleanup()
+
+    def test_proxy_disconnect(self):
+        """disconnect() works through proxy."""
+        cli = self._make_cli()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli.disconnect()
+        result = json.loads(buf.getvalue())
+        self.assertTrue(result["success"])
+        self.assertFalse(cli._device_state.connected)
+        cli.cleanup()
+
+    def test_proxy_serial_send(self):
+        """serial_send() works through proxy (no read_response to avoid sleep)."""
+        cli = self._make_cli()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli.serial_send("test", read_response=False)
+        result = json.loads(buf.getvalue())
+        self.assertTrue(result["success"])
+        cli.cleanup()
+
+    def test_proxy_serial_read(self):
+        """serial_read() works through proxy."""
+        cli = self._make_cli()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli.serial_read()
+        result = json.loads(buf.getvalue())
+        self.assertTrue(result["success"])
+        self.assertIn("log", result)
+        cli.cleanup()
+
+    def test_proxy_test_serial(self):
+        """test_serial() works through proxy."""
+        cli = self._make_cli()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            cli.test_serial()
+        result = json.loads(buf.getvalue())
+        self.assertTrue(result["success"])
+        cli.cleanup()
+
 
 class TestFPBCLIDirectMode(unittest.TestCase):
     """Test --direct flag bypasses proxy detection."""
@@ -186,7 +246,7 @@ class TestFPBCLIDirectMode(unittest.TestCase):
         """--direct flag forces direct serial connection."""
         mock_serial.return_value = MagicMock()
         cli = FPBCLI(
-            port="/dev/ttyACM0",
+            port="/dev/test-direct-mode",
             direct=True,
             server_url=self.server_url,
         )
@@ -199,22 +259,32 @@ class TestFPBCLIDirectMode(unittest.TestCase):
 class TestFPBCLIPortLockIntegration(unittest.TestCase):
     """Test port lock integration in FPBCLI."""
 
+    def _mock_proxy_no_server(self):
+        """Create a mock ServerProxy that simulates no server running + launch fails."""
+        mock_proxy = MagicMock()
+        mock_proxy.is_server_running.return_value = False
+        mock_proxy.launch_server.return_value = False
+        return mock_proxy
+
+    @patch("cli.fpb_cli.ServerProxy")
     @patch("cli.fpb_cli.serial.Serial")
-    def test_port_lock_acquired_on_connect(self, mock_serial):
+    def test_port_lock_acquired_on_connect(self, mock_serial, mock_proxy_cls):
         """Port lock is acquired when connecting directly."""
         mock_serial.return_value = MagicMock()
-        # No server running → direct mode
+        mock_proxy_cls.return_value = self._mock_proxy_no_server()
         cli = FPBCLI(
             port="/dev/test-cli-lock-1",
-            server_url="http://127.0.0.1:19999",  # No server
+            server_url="http://127.0.0.1:19999",
         )
         self.assertIsNotNone(cli._port_lock)
         cli.cleanup()
 
+    @patch("cli.fpb_cli.ServerProxy")
     @patch("cli.fpb_cli.serial.Serial")
-    def test_port_lock_released_on_cleanup(self, mock_serial):
+    def test_port_lock_released_on_cleanup(self, mock_serial, mock_proxy_cls):
         """Port lock is released on cleanup."""
         mock_serial.return_value = MagicMock()
+        mock_proxy_cls.return_value = self._mock_proxy_no_server()
         cli = FPBCLI(
             port="/dev/test-cli-lock-2",
             server_url="http://127.0.0.1:19999",
@@ -226,14 +296,17 @@ class TestFPBCLIPortLockIntegration(unittest.TestCase):
         self.assertTrue(lock2.acquire())
         lock2.release()
 
+    @patch("cli.fpb_cli.ServerProxy")
     @patch("cli.fpb_cli.serial.Serial")
-    def test_port_lock_conflict(self, mock_serial):
+    def test_port_lock_conflict(self, mock_serial, mock_proxy_cls):
         """Second CLI on same port fails with FPBCLIError."""
         mock_serial.return_value = MagicMock()
+        mock_proxy_cls.return_value = self._mock_proxy_no_server()
         cli1 = FPBCLI(
             port="/dev/test-cli-lock-3",
             server_url="http://127.0.0.1:19999",
         )
+        mock_proxy_cls.return_value = self._mock_proxy_no_server()
         with self.assertRaises(FPBCLIError) as ctx:
             FPBCLI(
                 port="/dev/test-cli-lock-3",
@@ -252,6 +325,26 @@ class TestFPBCLINoPortNoProxy(unittest.TestCase):
         self.assertIsNone(cli._proxy)
         self.assertIsNone(cli._port_lock)
         self.assertFalse(cli._device_state.connected)
+        cli.cleanup()
+
+    def test_require_device_raises_offline(self):
+        """_require_device raises when no proxy and not connected."""
+        cli = FPBCLI()
+        with self.assertRaises(FPBCLIError) as ctx:
+            cli._require_device()
+        self.assertIn("No device connected", str(ctx.exception))
+        cli.cleanup()
+
+    def test_write_local_helper(self):
+        """_write_local creates dirs and writes data."""
+        import tempfile
+
+        cli = FPBCLI()
+        with tempfile.TemporaryDirectory() as td:
+            path = os.path.join(td, "sub", "file.bin")
+            cli._write_local(path, b"\x01\x02\x03")
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(), b"\x01\x02\x03")
         cli.cleanup()
 
 

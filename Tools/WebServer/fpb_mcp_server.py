@@ -370,6 +370,20 @@ def serial_read(
     import time as _time
 
     cli = _get_cli(port=port)
+
+    # Proxy mode: read via WebServer /api/logs
+    if cli._proxy:
+        log_resp = cli._proxy.serial_read(raw_since=0)
+        raw = log_resp.get("raw_data", "")
+        log_lines = [ln for ln in raw.split("\n") if ln.strip()][-lines:]
+        return {
+            "success": True,
+            "new_data": raw,
+            "log": log_lines,
+            "log_count": len(log_lines),
+            "total_buffered": len(log_lines),
+        }
+
     ser = cli._device_state.ser
 
     if not ser or not cli._device_state.connected:
@@ -433,6 +447,17 @@ def serial_send(
     import time as _time
 
     cli = _get_cli(port=port)
+
+    # Proxy mode: send via WebServer /api/serial/send
+    if cli._proxy:
+        result = cli._proxy.serial_send(data)
+        if result.get("success") and read_response:
+            _time.sleep(timeout)
+            log_resp = cli._proxy.serial_read(raw_since=0)
+            raw = log_resp.get("raw_data", "")
+            result["response"] = raw.strip()
+        return result
+
     ser = cli._device_state.ser
 
     if not ser or not cli._device_state.connected:
