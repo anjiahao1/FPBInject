@@ -183,6 +183,72 @@ def check_port_available(host, port):
         sock.close()
 
 
+def get_port_owner(port):
+    """Get info about the process occupying a port.
+
+    Returns dict with pid, name, cmdline, or None if not found.
+    Uses /proc on Linux, lsof as fallback.
+    """
+    # Try /proc/net/tcp + /proc/<pid>/cmdline (no external tools needed)
+    try:
+        hex_port = f"{port:04X}"
+        with open("/proc/net/tcp", "r") as f:
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) < 10:
+                    continue
+                local = parts[1]
+                if local.endswith(f":{hex_port}") and parts[3] == "0A":  # LISTEN
+                    inode = parts[9]
+                    # Find PID by scanning /proc/*/fd/
+                    for entry in os.listdir("/proc"):
+                        if not entry.isdigit():
+                            continue
+                        fd_dir = f"/proc/{entry}/fd"
+                        try:
+                            for fd in os.listdir(fd_dir):
+                                link = os.readlink(f"{fd_dir}/{fd}")
+                                if f"socket:[{inode}]" in link:
+                                    pid = int(entry)
+                                    cmdline = open(f"/proc/{pid}/cmdline", "r").read()
+                                    cmdline = cmdline.replace("\x00", " ").strip()
+                                    comm = open(f"/proc/{pid}/comm", "r").read().strip()
+                                    return {
+                                        "pid": pid,
+                                        "name": comm,
+                                        "cmdline": cmdline,
+                                    }
+                        except (PermissionError, FileNotFoundError, OSError):
+                            continue
+    except Exception:
+        pass
+
+    # Fallback: try lsof
+    try:
+        import subprocess
+
+        out = subprocess.check_output(
+            ["lsof", "-ti", f":{port}"], stderr=subprocess.DEVNULL, timeout=3
+        ).decode()
+        for line in out.strip().split("\n"):
+            pid = int(line.strip())
+            try:
+                cmdline = (
+                    open(f"/proc/{pid}/cmdline", "r")
+                    .read()
+                    .replace("\x00", " ")
+                    .strip()
+                )
+                comm = open(f"/proc/{pid}/comm", "r").read().strip()
+                return {"pid": pid, "name": comm, "cmdline": cmdline}
+            except Exception:
+                return {"pid": pid, "name": "unknown", "cmdline": "unknown"}
+    except Exception:
+        pass
+
+    return None
+
+
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(description="FPBInject Web Server")
@@ -310,14 +376,55 @@ def main():
     # Check if port is already in use, unless skipped
     if not args.skip_port_check:
         if not check_port_available(args.host, args.port):
-            logger.error(f"❌ Error: Port {args.port} is already in use!")
-            logger.error("   Another FPBInject server may already be running.")
-            logger.error(
-                "   Please close the program occupying this port, or use --port to specify another port."
-            )
-            logger.error(f"   Example: ./main.py --port {args.port + 1}")
-            logger.error("   Or use --skip-port-check to force start (not recommended)")
-            sys.exit(1)
+            owner = get_port_owner(args.port)
+
+            # Check if it's a CLI-launched server
+            from cli.server_proxy import get_cli_server_pid, stop_cli_server
+
+            cli_pid = get_cli_server_pid()
+
+            # Show who is occupying the port
+            logger.error(f"❌ Port {args.port} is already in use!")
+            if owner:
+                logger.error(f"   Process: {owner['name']} (PID {owner['pid']})")
+                logger.error(f"   Command: {owner['cmdline']}")
+                logger.error(f"   Kill it: kill {owner['pid']}")
+            else:
+                logger.error("   Could not identify the occupying process.")
+
+            if cli_pid and owner and cli_pid == owner.get("pid"):
+                logger.warning(
+                    f"   ⚡ This is a CLI-launched background server (PID {cli_pid})."
+                )
+                try:
+                    answer = input("   Terminate it and continue? [Y/n] ")
+                except (EOFError, KeyboardInterrupt):
+                    answer = "n"
+                if answer.strip().lower() in ("", "y", "yes"):
+                    result = stop_cli_server()
+                    if result.get("success"):
+                        logger.info(f"   ✅ {result['message']}")
+                        import time as _time
+
+                        _time.sleep(0.5)
+                    else:
+                        logger.error(f"   ❌ {result.get('error', 'Unknown error')}")
+                        sys.exit(1)
+                else:
+                    logger.info("   Aborted.")
+                    sys.exit(0)
+            else:
+                logger.error("")
+                logger.error("   Options:")
+                if owner:
+                    logger.error(f"     kill {owner['pid']}")
+                if cli_pid:
+                    logger.error(
+                        f"     fpb_cli.py server-stop  (CLI server PID {cli_pid})"
+                    )
+                logger.error(f"     ./main.py --port {args.port + 1}")
+                logger.error("     ./main.py --skip-port-check  (not recommended)")
+                sys.exit(1)
 
     # Generate auth token
     token = None if args.no_auth else secrets.token_hex(4)

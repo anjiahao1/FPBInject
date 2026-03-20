@@ -16,8 +16,10 @@ background subprocess so the CLI always operates in proxy mode.
 import json
 import logging
 import os
+import signal
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any, Dict, Optional
 from urllib.request import Request, urlopen
@@ -34,6 +36,63 @@ _API_TIMEOUT = 30
 # Auto-launch settings
 _LAUNCH_TIMEOUT = 10  # Max seconds to wait for server startup
 _LAUNCH_POLL_INTERVAL = 0.3  # Poll interval during startup wait
+
+# PID file for CLI-launched server (in system temp dir)
+_CLI_SERVER_PID_FILE = os.path.join(tempfile.gettempdir(), "fpbinject_cli_server.pid")
+
+
+def _remove_pid_file():
+    """Remove the CLI server PID file if it exists."""
+    try:
+        os.remove(_CLI_SERVER_PID_FILE)
+    except OSError:
+        pass
+
+
+def get_cli_server_pid() -> Optional[int]:
+    """Read the PID of a CLI-launched server, if alive.
+
+    Returns the PID (int) if the PID file exists and the process is
+    still running, otherwise None.  Stale PID files are cleaned up.
+    """
+    try:
+        with open(_CLI_SERVER_PID_FILE, "r") as f:
+            pid = int(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+    # Check if process is still alive
+    try:
+        os.kill(pid, 0)  # signal 0 = existence check
+        return pid
+    except OSError:
+        # Process gone — stale PID file
+        _remove_pid_file()
+        return None
+
+
+def stop_cli_server() -> dict:
+    """Stop a CLI-launched WebServer if one is running.
+
+    Returns a JSON-style dict with success/message.
+    """
+    pid = get_cli_server_pid()
+    if pid is None:
+        return {"success": False, "error": "No CLI-launched server is running"}
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        # Wait briefly for it to exit
+        for _ in range(20):
+            time.sleep(0.25)
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                break  # Process exited
+        _remove_pid_file()
+        return {"success": True, "message": f"Server (PID {pid}) terminated"}
+    except Exception as e:
+        return {"success": False, "error": f"Failed to stop server (PID {pid}): {e}"}
 
 
 class ServerProxy:
@@ -114,8 +173,11 @@ class ServerProxy:
     def launch_server(self) -> bool:
         """Launch WebServer as a background subprocess.
 
-        Starts main.py with --no-browser --no-auth flags and waits
-        until the server responds to /api/status.
+        Starts main.py with --no-browser flag and waits until the server
+        responds to /api/status.  Writes a PID file so main.py and
+        ``server-stop`` can identify CLI-launched instances.
+
+        Auth is kept enabled — localhost requests are exempt by default.
 
         Returns True if server started successfully.
         """
@@ -140,7 +202,6 @@ class ServerProxy:
             sys.executable,
             main_py,
             "--no-browser",
-            "--no-auth",
             "--port",
             str(port),
         ]
@@ -158,6 +219,13 @@ class ServerProxy:
             logger.error(f"Failed to launch WebServer: {e}")
             return False
 
+        # Write PID file so others can identify this CLI-launched server
+        try:
+            with open(_CLI_SERVER_PID_FILE, "w") as f:
+                f.write(str(self._server_process.pid))
+        except Exception as e:
+            logger.warning(f"Failed to write PID file: {e}")
+
         # Wait for server to become reachable
         deadline = time.time() + _LAUNCH_TIMEOUT
         while time.time() < deadline:
@@ -167,6 +235,7 @@ class ServerProxy:
                     f"WebServer process exited with code {self._server_process.returncode}"
                 )
                 self._server_process = None
+                _remove_pid_file()
                 return False
 
             if self.is_server_running():
@@ -182,6 +251,7 @@ class ServerProxy:
         except Exception:
             pass
         self._server_process = None
+        _remove_pid_file()
         return False
 
     # ------------------------------------------------------------------

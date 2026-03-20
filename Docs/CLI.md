@@ -171,9 +171,28 @@ Establishes a serial connection. Required before any online command when using `
 fpb_cli.py disconnect
 ```
 
+#### 10. `server-stop` - Stop CLI-launched WebServer
+
+```bash
+fpb_cli.py server-stop
+```
+
+Terminates a WebServer background process that was auto-launched by the CLI.
+Only affects servers started by the CLI proxy (tracked via PID file at `/tmp/fpbinject_cli_server.pid`).
+
+**Output:**
+```json
+{"success": true, "message": "Server (PID 12345) terminated"}
+```
+
+If no CLI-launched server is running:
+```json
+{"success": false, "error": "No CLI-launched server is running"}
+```
+
 ### Online Commands (Device Required)
 
-#### 10. `info` - Get device FPB info
+#### 11. `info` - Get device FPB info
 
 ```bash
 fpb_cli.py --port /dev/ttyACM0 info
@@ -191,7 +210,7 @@ fpb_cli.py --port /dev/ttyACM0 info
 }
 ```
 
-#### 11. `inject` - Inject patch to device
+#### 12. `inject` - Inject patch to device
 
 ```bash
 fpb_cli.py --port <device> --elf <elf> --compile-commands <path> \
@@ -228,14 +247,14 @@ fpb_cli.py --port /dev/ttyACM0 --elf firmware.elf \
 }
 ```
 
-#### 12. `unpatch` - Remove patch
+#### 13. `unpatch` - Remove patch
 
 ```bash
 fpb_cli.py --port /dev/ttyACM0 unpatch --comp <slot>
 fpb_cli.py --port /dev/ttyACM0 unpatch --all
 ```
 
-#### 13. `test-serial` - Test serial throughput
+#### 14. `test-serial` - Test serial throughput
 
 3-phase probing to find optimal transfer parameters.
 
@@ -250,7 +269,7 @@ Options:
 
 ### Serial I/O Commands (Device Required)
 
-#### 14. `serial-send` - Send data to device
+#### 15. `serial-send` - Send data to device
 
 ```bash
 fpb_cli.py --port /dev/ttyACM0 serial-send <data> [options]
@@ -271,7 +290,7 @@ Options:
 
 > WARNING: Avoid sending `fl` commands directly — use `inject`/`unpatch`/`info` instead.
 
-#### 15. `serial-read` - Read serial output
+#### 16. `serial-read` - Read serial output
 
 ```bash
 fpb_cli.py --port /dev/ttyACM0 serial-read [options]
@@ -294,7 +313,7 @@ Options:
 
 ### Memory Access Commands (Device Required)
 
-#### 16. `mem-read` - Read device memory
+#### 17. `mem-read` - Read device memory
 
 ```bash
 fpb_cli.py --port /dev/ttyACM0 mem-read <addr> <length> [--fmt hex|raw|u32]
@@ -305,7 +324,7 @@ fpb_cli.py --port /dev/ttyACM0 mem-read <addr> <length> [--fmt hex|raw|u32]
 fpb_cli.py --port /dev/ttyACM0 mem-read 0x20000000 64 --fmt hex
 ```
 
-#### 17. `mem-write` - Write to device memory
+#### 18. `mem-write` - Write to device memory
 
 ```bash
 fpb_cli.py --port /dev/ttyACM0 mem-write <addr> <hex_data>
@@ -316,7 +335,7 @@ fpb_cli.py --port /dev/ttyACM0 mem-write <addr> <hex_data>
 fpb_cli.py --port /dev/ttyACM0 mem-write 0x20001000 DEADBEEF01020304
 ```
 
-#### 18. `mem-dump` - Dump memory to file
+#### 19. `mem-dump` - Dump memory to file
 
 ```bash
 fpb_cli.py --port /dev/ttyACM0 mem-dump <addr> <length> <output_file>
@@ -329,7 +348,7 @@ fpb_cli.py --port /dev/ttyACM0 mem-dump 0x20000000 4096 /tmp/ram.bin
 
 ### File Transfer Commands (Device Required)
 
-#### 19. `file-list` - List device directory
+#### 20. `file-list` - List device directory
 
 ```bash
 fpb_cli.py --port /dev/ttyACM0 file-list [path]
@@ -337,7 +356,7 @@ fpb_cli.py --port /dev/ttyACM0 file-list [path]
 
 Default path is `/`.
 
-#### 20. `file-stat` - Get file info
+#### 21. `file-stat` - Get file info
 
 ```bash
 fpb_cli.py --port /dev/ttyACM0 file-stat <path>
@@ -345,7 +364,7 @@ fpb_cli.py --port /dev/ttyACM0 file-stat <path>
 
 Returns size, modification time, and type (file/dir).
 
-#### 21. `file-download` - Download file from device
+#### 22. `file-download` - Download file from device
 
 ```bash
 fpb_cli.py --port /dev/ttyACM0 file-download <remote_path> <local_path>

@@ -928,6 +928,12 @@ class FPBCLI:
             self._port_lock.release()
             self._port_lock = None
 
+    def server_stop(self) -> None:
+        """Stop a CLI-launched WebServer."""
+        from cli.server_proxy import stop_cli_server
+
+        self.output_json(stop_cli_server())
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -1194,6 +1200,11 @@ Examples:
     # disconnect command
     subparsers.add_parser("disconnect", help="Disconnect from device")
 
+    # server-stop command
+    subparsers.add_parser(
+        "server-stop", help="Stop a CLI-launched WebServer background process"
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -1264,6 +1275,8 @@ Examples:
             cli.connect(args.port, args.baudrate)
         elif args.command == "disconnect":
             cli.disconnect()
+        elif args.command == "server-stop":
+            cli.server_stop()
     except FPBCLIError as e:
         cli.output_error(str(e))
         sys.exit(1)
