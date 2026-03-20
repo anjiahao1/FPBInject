@@ -812,5 +812,176 @@ class TestCheckRequirements(unittest.TestCase):
         mock_dist.assert_called_with("pyserial")
 
 
+class TestMainPortConflict(unittest.TestCase):
+    """Test main() port conflict handling with get_port_owner and CLI server detection."""
+
+    def _mock_args(self, **overrides):
+        defaults = dict(
+            host="0.0.0.0",
+            port=5500,
+            debug=False,
+            skip_port_check=False,
+            no_browser=True,
+            no_auth=True,
+        )
+        defaults.update(overrides)
+        return Mock(**defaults)
+
+    @patch("main.create_app")
+    @patch("main.restore_state")
+    @patch("main.check_port_available", return_value=False)
+    @patch(
+        "main.get_port_owner",
+        return_value={"pid": 100, "name": "python", "cmdline": "python main.py"},
+    )
+    @patch("main.parse_args")
+    def test_port_conflict_non_cli_process(
+        self, mock_args, mock_owner, mock_check, mock_restore, mock_create
+    ):
+        """Port occupied by non-CLI process → exit with options."""
+        mock_args.return_value = self._mock_args()
+        with patch("cli.server_proxy.get_cli_server_pid", return_value=None):
+            with self.assertRaises(SystemExit) as cm:
+                main.main()
+            self.assertEqual(cm.exception.code, 1)
+        mock_create.assert_not_called()
+
+    @patch("main.create_app")
+    @patch("main.restore_state")
+    @patch("main.check_port_available", return_value=False)
+    @patch(
+        "main.get_port_owner",
+        return_value={
+            "pid": 200,
+            "name": "python",
+            "cmdline": "python main.py --no-browser",
+        },
+    )
+    @patch("main.parse_args")
+    def test_port_conflict_cli_server_user_accepts(
+        self, mock_args, mock_owner, mock_check, mock_restore, mock_create
+    ):
+        """Port occupied by CLI server, user answers Y → kill and continue."""
+        mock_args.return_value = self._mock_args()
+        mock_app = Mock()
+        mock_create.return_value = mock_app
+        with patch("cli.server_proxy.get_cli_server_pid", return_value=200), patch(
+            "cli.server_proxy.stop_cli_server",
+            return_value={"success": True, "message": "done"},
+        ), patch("builtins.input", return_value="Y"), patch("time.sleep"), patch(
+            "main.threading.Timer"
+        ):
+            # Should NOT exit — continues to start server
+            main.main()
+        mock_create.assert_called_once()
+
+    @patch("main.create_app")
+    @patch("main.restore_state")
+    @patch("main.check_port_available", return_value=False)
+    @patch(
+        "main.get_port_owner",
+        return_value={
+            "pid": 200,
+            "name": "python",
+            "cmdline": "python main.py --no-browser",
+        },
+    )
+    @patch("main.parse_args")
+    def test_port_conflict_cli_server_user_declines(
+        self, mock_args, mock_owner, mock_check, mock_restore, mock_create
+    ):
+        """Port occupied by CLI server, user answers n → abort."""
+        mock_args.return_value = self._mock_args()
+        with patch("cli.server_proxy.get_cli_server_pid", return_value=200), patch(
+            "builtins.input", return_value="n"
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                main.main()
+            self.assertEqual(cm.exception.code, 0)
+        mock_create.assert_not_called()
+
+    @patch("main.create_app")
+    @patch("main.restore_state")
+    @patch("main.check_port_available", return_value=False)
+    @patch(
+        "main.get_port_owner",
+        return_value={
+            "pid": 200,
+            "name": "python",
+            "cmdline": "python main.py --no-browser",
+        },
+    )
+    @patch("main.parse_args")
+    def test_port_conflict_cli_server_stop_fails(
+        self, mock_args, mock_owner, mock_check, mock_restore, mock_create
+    ):
+        """Port occupied by CLI server, user answers Y but stop fails → exit 1."""
+        mock_args.return_value = self._mock_args()
+        with patch("cli.server_proxy.get_cli_server_pid", return_value=200), patch(
+            "cli.server_proxy.stop_cli_server",
+            return_value={"success": False, "error": "fail"},
+        ), patch("builtins.input", return_value="Y"):
+            with self.assertRaises(SystemExit) as cm:
+                main.main()
+            self.assertEqual(cm.exception.code, 1)
+
+    @patch("main.create_app")
+    @patch("main.restore_state")
+    @patch("main.check_port_available", return_value=False)
+    @patch(
+        "main.get_port_owner",
+        return_value={
+            "pid": 200,
+            "name": "python",
+            "cmdline": "python main.py --no-browser",
+        },
+    )
+    @patch("main.parse_args")
+    def test_port_conflict_cli_server_eof_on_input(
+        self, mock_args, mock_owner, mock_check, mock_restore, mock_create
+    ):
+        """Port occupied by CLI server, EOFError on input → abort."""
+        mock_args.return_value = self._mock_args()
+        with patch("cli.server_proxy.get_cli_server_pid", return_value=200), patch(
+            "builtins.input", side_effect=EOFError
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                main.main()
+            self.assertEqual(cm.exception.code, 0)
+
+    @patch("main.create_app")
+    @patch("main.restore_state")
+    @patch("main.check_port_available", return_value=False)
+    @patch("main.get_port_owner", return_value=None)
+    @patch("main.parse_args")
+    def test_port_conflict_unknown_owner(
+        self, mock_args, mock_owner, mock_check, mock_restore, mock_create
+    ):
+        """Port occupied but owner unknown → exit with generic message."""
+        mock_args.return_value = self._mock_args()
+        with patch("cli.server_proxy.get_cli_server_pid", return_value=None):
+            with self.assertRaises(SystemExit) as cm:
+                main.main()
+            self.assertEqual(cm.exception.code, 1)
+
+    @patch("main.create_app")
+    @patch("main.restore_state")
+    @patch("main.check_port_available", return_value=False)
+    @patch(
+        "main.get_port_owner",
+        return_value={"pid": 100, "name": "node", "cmdline": "node server.js"},
+    )
+    @patch("main.parse_args")
+    def test_port_conflict_non_cli_with_stale_cli_pid(
+        self, mock_args, mock_owner, mock_check, mock_restore, mock_create
+    ):
+        """Port occupied by non-CLI process but stale CLI PID exists → show both options."""
+        mock_args.return_value = self._mock_args()
+        with patch("cli.server_proxy.get_cli_server_pid", return_value=999):
+            with self.assertRaises(SystemExit) as cm:
+                main.main()
+            self.assertEqual(cm.exception.code, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
