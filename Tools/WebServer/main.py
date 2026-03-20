@@ -381,7 +381,7 @@ def main():
             # Check if it's a CLI-launched server
             from cli.server_proxy import get_cli_server_pid, stop_cli_server
 
-            cli_pid = get_cli_server_pid()
+            cli_pid = get_cli_server_pid(args.port)
 
             # Show who is occupying the port
             logger.error(f"❌ Port {args.port} is already in use!")

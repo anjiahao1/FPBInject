@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from fpb_inject import FPBInject  # noqa: E402
 from core.state import DeviceStateBase  # noqa: E402
 from utils.port_lock import PortLock  # noqa: E402
-from cli.server_proxy import ServerProxy, DEFAULT_SERVER_URL  # noqa: E402
+from cli.server_proxy import ServerProxy, DEFAULT_SERVER_URL, DEFAULT_PORT  # noqa: E402
 
 try:
     import serial
@@ -928,11 +928,26 @@ class FPBCLI:
             self._port_lock.release()
             self._port_lock = None
 
-    def server_stop(self) -> None:
-        """Stop a CLI-launched WebServer."""
-        from cli.server_proxy import stop_cli_server
+    def server_stop(self, port: int = DEFAULT_PORT) -> None:
+        """Stop a CLI-launched WebServer on the given port."""
+        from cli.server_proxy import stop_cli_server, list_cli_servers
 
-        self.output_json(stop_cli_server())
+        if port == DEFAULT_PORT:
+            # If user didn't specify, try to find any running CLI server
+            servers = list_cli_servers()
+            if len(servers) == 1:
+                port = servers[0]["port"]
+            elif len(servers) > 1:
+                self.output_json(
+                    {
+                        "success": False,
+                        "error": "Multiple CLI servers running, specify --port",
+                        "servers": servers,
+                    }
+                )
+                return
+
+        self.output_json(stop_cli_server(port))
 
 
 def main():
@@ -1201,8 +1216,14 @@ Examples:
     subparsers.add_parser("disconnect", help="Disconnect from device")
 
     # server-stop command
-    subparsers.add_parser(
+    server_stop_parser = subparsers.add_parser(
         "server-stop", help="Stop a CLI-launched WebServer background process"
+    )
+    server_stop_parser.add_argument(
+        "--server-port",
+        type=int,
+        default=0,
+        help="Port of the CLI server to stop (default: auto-detect or 5500)",
     )
 
     args = parser.parse_args()
@@ -1276,7 +1297,8 @@ Examples:
         elif args.command == "disconnect":
             cli.disconnect()
         elif args.command == "server-stop":
-            cli.server_stop()
+            port = args.server_port if args.server_port else DEFAULT_PORT
+            cli.server_stop(port)
     except FPBCLIError as e:
         cli.output_error(str(e))
         sys.exit(1)

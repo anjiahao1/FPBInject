@@ -380,3 +380,163 @@ class TestServerProxySerialAndConnection(unittest.TestCase):
         result = self._proxy().serial_read(raw_since=0)
         self.assertIn("raw_data", result)
         self.assertEqual(result["raw_data"], "line1\nline2\n")
+
+
+class TestPidFileFunctions(unittest.TestCase):
+    """Test PID file management functions."""
+
+    def setUp(self):
+        from cli.server_proxy import _WEBSERVER_DIR
+
+        self.webserver_dir = _WEBSERVER_DIR
+        self.test_port = 19999
+        self.pid_path = os.path.join(
+            self.webserver_dir, f".cli_server_{self.test_port}.pid"
+        )
+        # Clean up before each test
+        if os.path.exists(self.pid_path):
+            os.remove(self.pid_path)
+
+    def tearDown(self):
+        if os.path.exists(self.pid_path):
+            os.remove(self.pid_path)
+
+    def test_pid_file_path(self):
+        from cli.server_proxy import _pid_file_path
+
+        path = _pid_file_path(5500)
+        self.assertTrue(path.endswith(".cli_server_5500.pid"))
+        self.assertIn(self.webserver_dir, path)
+
+    def test_pid_file_path_custom_port(self):
+        from cli.server_proxy import _pid_file_path
+
+        path = _pid_file_path(8080)
+        self.assertTrue(path.endswith(".cli_server_8080.pid"))
+
+    def test_get_cli_server_pid_no_file(self):
+        from cli.server_proxy import get_cli_server_pid
+
+        self.assertIsNone(get_cli_server_pid(self.test_port))
+
+    def test_get_cli_server_pid_stale(self):
+        """PID file exists but process is dead — should clean up."""
+        from cli.server_proxy import get_cli_server_pid
+
+        with open(self.pid_path, "w") as f:
+            f.write("999999999")  # Very unlikely to be a real PID
+        self.assertIsNone(get_cli_server_pid(self.test_port))
+        self.assertFalse(os.path.exists(self.pid_path))
+
+    def test_get_cli_server_pid_alive(self):
+        """PID file with our own PID — should return it."""
+        from cli.server_proxy import get_cli_server_pid
+
+        with open(self.pid_path, "w") as f:
+            f.write(str(os.getpid()))
+        self.assertEqual(get_cli_server_pid(self.test_port), os.getpid())
+
+    def test_get_cli_server_pid_invalid_content(self):
+        from cli.server_proxy import get_cli_server_pid
+
+        with open(self.pid_path, "w") as f:
+            f.write("not-a-number")
+        self.assertIsNone(get_cli_server_pid(self.test_port))
+
+    def test_remove_pid_file(self):
+        from cli.server_proxy import _remove_pid_file
+
+        with open(self.pid_path, "w") as f:
+            f.write("12345")
+        _remove_pid_file(self.test_port)
+        self.assertFalse(os.path.exists(self.pid_path))
+
+    def test_remove_pid_file_nonexistent(self):
+        from cli.server_proxy import _remove_pid_file
+
+        # Should not raise
+        _remove_pid_file(self.test_port)
+
+    def test_stop_cli_server_no_server(self):
+        from cli.server_proxy import stop_cli_server
+
+        result = stop_cli_server(self.test_port)
+        self.assertFalse(result["success"])
+        self.assertIn(str(self.test_port), result["error"])
+
+    def test_stop_cli_server_stale_pid(self):
+        from cli.server_proxy import stop_cli_server
+
+        with open(self.pid_path, "w") as f:
+            f.write("999999999")
+        result = stop_cli_server(self.test_port)
+        self.assertFalse(result["success"])
+
+    def test_stop_cli_server_success(self):
+        """Start a real subprocess and stop it."""
+        import subprocess
+        from cli.server_proxy import stop_cli_server
+
+        proc = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(60)"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        with open(self.pid_path, "w") as f:
+            f.write(str(proc.pid))
+
+        result = stop_cli_server(self.test_port)
+        self.assertTrue(result["success"])
+        self.assertIn(str(proc.pid), result["message"])
+        self.assertFalse(os.path.exists(self.pid_path))
+        # Ensure process is dead
+        proc.wait(timeout=5)
+
+    def test_list_cli_servers_empty(self):
+        from cli.server_proxy import list_cli_servers
+
+        # No PID files for our test port
+        servers = list_cli_servers()
+        # Filter to our test port only
+        test_servers = [s for s in servers if s["port"] == self.test_port]
+        self.assertEqual(len(test_servers), 0)
+
+    def test_list_cli_servers_with_entry(self):
+        from cli.server_proxy import list_cli_servers
+
+        # Write a PID file with our own PID (alive)
+        with open(self.pid_path, "w") as f:
+            f.write(str(os.getpid()))
+        servers = list_cli_servers()
+        test_servers = [s for s in servers if s["port"] == self.test_port]
+        self.assertEqual(len(test_servers), 1)
+        self.assertEqual(test_servers[0]["pid"], os.getpid())
+
+
+class TestGetPortOwner(unittest.TestCase):
+    """Test get_port_owner function from main.py."""
+
+    def test_port_not_in_use(self):
+        from main import get_port_owner
+
+        result = get_port_owner(19876)  # Very unlikely to be in use
+        self.assertIsNone(result)
+
+    def test_port_in_use(self):
+        """Bind a port and check get_port_owner finds us."""
+        import socket
+        from main import get_port_owner
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("127.0.0.1", 19877))
+        sock.listen(1)
+        try:
+            result = get_port_owner(19877)
+            if result is not None:
+                # On Linux with /proc, should find our PID
+                self.assertEqual(result["pid"], os.getpid())
+                self.assertIn("name", result)
+                self.assertIn("cmdline", result)
+        finally:
+            sock.close()

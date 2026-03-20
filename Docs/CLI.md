@@ -174,15 +174,19 @@ fpb_cli.py disconnect
 #### 10. `server-stop` - Stop CLI-launched WebServer
 
 ```bash
-fpb_cli.py server-stop
+fpb_cli.py server-stop [--server-port <port>]
 ```
 
 Terminates a WebServer background process that was auto-launched by the CLI.
-Only affects servers started by the CLI proxy (tracked via PID file at `/tmp/fpbinject_cli_server.pid`).
+PID files are stored per-port in the WebServer directory (`.cli_server_<port>.pid`),
+so multiple CLI servers on different ports can coexist.
+
+If `--server-port` is omitted and only one CLI server is running, it auto-detects.
+If multiple are running, you must specify which port to stop.
 
 **Output:**
 ```json
-{"success": true, "message": "Server (PID 12345) terminated"}
+{"success": true, "message": "Server on port 5500 (PID 12345) terminated"}
 ```
 
 If no CLI-launched server is running:

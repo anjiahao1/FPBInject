@@ -13,21 +13,22 @@ If the WebServer is not running, the proxy can auto-launch it as a
 background subprocess so the CLI always operates in proxy mode.
 """
 
+import glob
 import json
 import logging
 import os
 import signal
 import subprocess
 import sys
-import tempfile
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib.request import Request, urlopen
 
 logger = logging.getLogger(__name__)
 
 # Default WebServer URL
 DEFAULT_SERVER_URL = "http://127.0.0.1:5500"
+DEFAULT_PORT = 5500
 
 # Timeout for probe / API calls (seconds)
 _PROBE_TIMEOUT = 2
@@ -37,26 +38,31 @@ _API_TIMEOUT = 30
 _LAUNCH_TIMEOUT = 10  # Max seconds to wait for server startup
 _LAUNCH_POLL_INTERVAL = 0.3  # Poll interval during startup wait
 
-# PID file for CLI-launched server (in system temp dir)
-_CLI_SERVER_PID_FILE = os.path.join(tempfile.gettempdir(), "fpbinject_cli_server.pid")
+# PID file directory: WebServer root (next to main.py)
+_WEBSERVER_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
-def _remove_pid_file():
-    """Remove the CLI server PID file if it exists."""
+def _pid_file_path(port: int = DEFAULT_PORT) -> str:
+    """Return PID file path for a given port."""
+    return os.path.join(_WEBSERVER_DIR, f".cli_server_{port}.pid")
+
+
+def _remove_pid_file(port: int = DEFAULT_PORT):
+    """Remove the CLI server PID file for a given port."""
     try:
-        os.remove(_CLI_SERVER_PID_FILE)
+        os.remove(_pid_file_path(port))
     except OSError:
         pass
 
 
-def get_cli_server_pid() -> Optional[int]:
-    """Read the PID of a CLI-launched server, if alive.
+def get_cli_server_pid(port: int = DEFAULT_PORT) -> Optional[int]:
+    """Read the PID of a CLI-launched server on *port*, if alive.
 
     Returns the PID (int) if the PID file exists and the process is
     still running, otherwise None.  Stale PID files are cleaned up.
     """
     try:
-        with open(_CLI_SERVER_PID_FILE, "r") as f:
+        with open(_pid_file_path(port), "r") as f:
             pid = int(f.read().strip())
     except (OSError, ValueError):
         return None
@@ -67,18 +73,39 @@ def get_cli_server_pid() -> Optional[int]:
         return pid
     except OSError:
         # Process gone — stale PID file
-        _remove_pid_file()
+        _remove_pid_file(port)
         return None
 
 
-def stop_cli_server() -> dict:
-    """Stop a CLI-launched WebServer if one is running.
+def list_cli_servers() -> List[Dict[str, Any]]:
+    """List all CLI-launched servers (by scanning PID files).
+
+    Returns a list of dicts with ``port`` and ``pid`` keys.
+    """
+    results = []
+    for path in glob.glob(os.path.join(_WEBSERVER_DIR, ".cli_server_*.pid")):
+        basename = os.path.basename(path)
+        try:
+            port = int(basename.replace(".cli_server_", "").replace(".pid", ""))
+        except ValueError:
+            continue
+        pid = get_cli_server_pid(port)
+        if pid is not None:
+            results.append({"port": port, "pid": pid})
+    return results
+
+
+def stop_cli_server(port: int = DEFAULT_PORT) -> dict:
+    """Stop a CLI-launched WebServer on *port* if one is running.
 
     Returns a JSON-style dict with success/message.
     """
-    pid = get_cli_server_pid()
+    pid = get_cli_server_pid(port)
     if pid is None:
-        return {"success": False, "error": "No CLI-launched server is running"}
+        return {
+            "success": False,
+            "error": f"No CLI-launched server is running on port {port}",
+        }
 
     try:
         os.kill(pid, signal.SIGTERM)
@@ -89,10 +116,16 @@ def stop_cli_server() -> dict:
                 os.kill(pid, 0)
             except OSError:
                 break  # Process exited
-        _remove_pid_file()
-        return {"success": True, "message": f"Server (PID {pid}) terminated"}
+        _remove_pid_file(port)
+        return {
+            "success": True,
+            "message": f"Server on port {port} (PID {pid}) terminated",
+        }
     except Exception as e:
-        return {"success": False, "error": f"Failed to stop server (PID {pid}): {e}"}
+        return {
+            "success": False,
+            "error": f"Failed to stop server (PID {pid}): {e}",
+        }
 
 
 class ServerProxy:
@@ -221,7 +254,7 @@ class ServerProxy:
 
         # Write PID file so others can identify this CLI-launched server
         try:
-            with open(_CLI_SERVER_PID_FILE, "w") as f:
+            with open(_pid_file_path(port), "w") as f:
                 f.write(str(self._server_process.pid))
         except Exception as e:
             logger.warning(f"Failed to write PID file: {e}")
@@ -235,7 +268,7 @@ class ServerProxy:
                     f"WebServer process exited with code {self._server_process.returncode}"
                 )
                 self._server_process = None
-                _remove_pid_file()
+                _remove_pid_file(port)
                 return False
 
             if self.is_server_running():
@@ -251,7 +284,7 @@ class ServerProxy:
         except Exception:
             pass
         self._server_process = None
-        _remove_pid_file()
+        _remove_pid_file(port)
         return False
 
     # ------------------------------------------------------------------

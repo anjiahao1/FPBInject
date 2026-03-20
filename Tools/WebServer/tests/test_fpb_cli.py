@@ -1904,6 +1904,98 @@ class TestFPBCLIMain(unittest.TestCase):
         mock_search.assert_called_once()
         mock_cleanup.assert_called_once()
 
+    @patch("sys.argv", ["fpb_cli.py", "server-stop"])
+    @patch.object(FPBCLI, "server_stop")
+    @patch.object(FPBCLI, "cleanup")
+    def test_main_server_stop_command(self, mock_cleanup, mock_stop):
+        """Test main dispatches server-stop command."""
+        from cli.fpb_cli import main
+
+        main()
+        mock_stop.assert_called_once()
+        mock_cleanup.assert_called_once()
+
+    @patch("sys.argv", ["fpb_cli.py", "server-stop", "--server-port", "8080"])
+    @patch.object(FPBCLI, "server_stop")
+    @patch.object(FPBCLI, "cleanup")
+    def test_main_server_stop_with_port(self, mock_cleanup, mock_stop):
+        """Test main dispatches server-stop with custom port."""
+        from cli.fpb_cli import main
+
+        main()
+        mock_stop.assert_called_once_with(8080)
+
+
+class TestFPBCLIServerStop(unittest.TestCase):
+    """Test FPBCLI.server_stop method."""
+
+    def setUp(self):
+        self.cli = FPBCLI(verbose=False)
+
+    def tearDown(self):
+        self.cli.cleanup()
+
+    @patch(
+        "cli.server_proxy.stop_cli_server",
+        return_value={
+            "success": False,
+            "error": "No CLI-launched server is running on port 5500",
+        },
+    )
+    @patch("cli.server_proxy.list_cli_servers", return_value=[])
+    def test_server_stop_no_server(self, mock_list, mock_stop):
+        """server_stop with no running server."""
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            self.cli.server_stop()
+            data = json.loads(mock_stdout.getvalue())
+            self.assertFalse(data["success"])
+
+    @patch(
+        "cli.server_proxy.stop_cli_server",
+        return_value={
+            "success": True,
+            "message": "Server on port 6000 (PID 123) terminated",
+        },
+    )
+    @patch(
+        "cli.server_proxy.list_cli_servers", return_value=[{"port": 6000, "pid": 123}]
+    )
+    def test_server_stop_auto_detect_single(self, mock_list, mock_stop):
+        """server_stop auto-detects single running server."""
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            self.cli.server_stop()
+            data = json.loads(mock_stdout.getvalue())
+            self.assertTrue(data["success"])
+            mock_stop.assert_called_once_with(6000)
+
+    @patch(
+        "cli.server_proxy.list_cli_servers",
+        return_value=[{"port": 5500, "pid": 100}, {"port": 6000, "pid": 200}],
+    )
+    def test_server_stop_multiple_servers(self, mock_list):
+        """server_stop with multiple servers returns error."""
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            self.cli.server_stop()
+            data = json.loads(mock_stdout.getvalue())
+            self.assertFalse(data["success"])
+            self.assertIn("Multiple", data["error"])
+            self.assertEqual(len(data["servers"]), 2)
+
+    @patch(
+        "cli.server_proxy.stop_cli_server",
+        return_value={
+            "success": True,
+            "message": "Server on port 8080 (PID 456) terminated",
+        },
+    )
+    def test_server_stop_explicit_port(self, mock_stop):
+        """server_stop with explicit port skips auto-detect."""
+        with patch("sys.stdout", new_callable=io.StringIO) as mock_stdout:
+            self.cli.server_stop(port=8080)
+            data = json.loads(mock_stdout.getvalue())
+            self.assertTrue(data["success"])
+            mock_stop.assert_called_once_with(8080)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

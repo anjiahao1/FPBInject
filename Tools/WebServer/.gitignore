@@ -1,5 +1,6 @@
 config.json
 .coverage
+.cli_server_*.pid
 
 # Node.js
 node_modules/
